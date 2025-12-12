@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Generated files
+repomix-output.xml
+repomix-output.txt
+repomix-output.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Database data (if running locally)
+db/data/

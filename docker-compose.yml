@@ -1,0 +1,93 @@
+# AEON Matrix - Docker Composition (V2 - MCP Native)
+#
+# This runs ONLY the storage layer. MCP servers are configured
+# separately in Claude Desktop's config.
+#
+# Usage:
+#   docker compose up -d                    # PostgreSQL only
+#   docker compose --profile graph up -d    # PostgreSQL + Neo4j
+
+version: '3.8'
+
+services:
+  # ═══════════════════════════════════════════════════════════════
+  # MEMORY SUBSTRATE - PostgreSQL with pgvector
+  # ═══════════════════════════════════════════════════════════════
+  aeon-db:
+    image: pgvector/pgvector:pg16
+    container_name: aeon-matrix-db
+    environment:
+      POSTGRES_DB: aeon_matrix
+      POSTGRES_USER: architect
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-matrix_secret}
+    volumes:
+      - aeon_memory:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - matrix
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U architect -d aeon_matrix"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════
+  # RELATIONSHIP GRAPH - Neo4j (optional)
+  # Start with: docker compose --profile graph up -d
+  # ═══════════════════════════════════════════════════════════════
+  aeon-graph:
+    image: neo4j:5-community
+    container_name: aeon-matrix-graph
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-matrix_graph}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_memory_pagecache_size: 512M
+      NEO4J_dbms_memory_heap_initial__size: 512M
+      NEO4J_dbms_memory_heap_max__size: 1G
+    volumes:
+      - aeon_graph:/data
+    ports:
+      - "7474:7474"  # Browser UI
+      - "7687:7687"  # Bolt protocol
+    networks:
+      - matrix
+    profiles:
+      - graph
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════
+  # NOTE: MCP Servers are NOT Docker services
+  # They run via Claude Desktop configuration (see below)
+  # ═══════════════════════════════════════════════════════════════
+  #
+  # Configure these in your Claude Desktop config:
+  # ~/Library/Application Support/Claude/claude_desktop_config.json
+  #
+  # {
+  #   "mcpServers": {
+  #     "aeon-db": {
+  #       "command": "npx",
+  #       "args": ["-y", "mcp-db-server"],
+  #       "env": {
+  #         "DATABASE_URL": "postgres://architect:matrix_secret@localhost:5432/aeon_matrix"
+  #       }
+  #     },
+  #     "aeon-compute": {
+  #       "command": "npx",
+  #       "args": ["-y", "node-code-sandbox-mcp"]
+  #     }
+  #   }
+  # }
+
+volumes:
+  aeon_memory:
+    name: aeon_persistent_memory
+  aeon_graph:
+    name: aeon_relationship_graph
+
+networks:
+  matrix:
+    name: aeon_matrix_network
