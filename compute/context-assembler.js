@@ -18,7 +18,9 @@ import { ensureRelationship, updateFamiliarity } from './relationship-tracker.js
 import { extractSessionMemories, storeSessionMemories } from './memory-extractor.js';
 import { compileUserSetting } from './setting-preserver.js';
 import { extractAndSaveSettings } from './setting-extractor.js';
-import { withTransaction } from './db-pool.js';
+// Persona Autonomy imports (Constitution Principle VI)
+import { getPersonaNetwork } from './persona-relationship-tracker.js';
+import { getPersonaMemories, framePersonaMemories, getAllOpinions } from './persona-memory.js';
 const { Pool } = pg;
 
 let pool = null;
@@ -30,8 +32,10 @@ let pool = null;
  */
 function getPool() {
   if (!pool) {
-    const connectionString = process.env.DATABASE_URL ||
-      'postgres://architect:matrix_secret@localhost:5432/aeon_matrix';
+    if (!process.env.DATABASE_URL) {
+      throw new Error('[ContextAssembler] DATABASE_URL environment variable is required');
+    }
+    const connectionString = process.env.DATABASE_URL;
 
     pool = new Pool({
       connectionString,
@@ -46,14 +50,17 @@ function getPool() {
 
 /**
  * Token budget allocation for context components.
+ * Updated for Constitution Principle VI (Persona Autonomy).
  */
 const CONTEXT_BUDGET = {
-  soulMarkers: 500,      // Highest priority - persona voice markers
-  relationship: 300,     // Behavioral hints
-  setting: 200,          // Bar atmosphere
-  driftCorrection: 200,  // Voice corrections
-  memories: 1500,        // Framed memories (truncatable)
-  buffer: 300            // Safety margin
+  soulMarkers: 500,        // Highest priority - persona voice markers
+  relationship: 300,       // Behavioral hints (user relationship)
+  personaRelations: 200,   // Persona-to-persona relationships (NEW - Principle VI)
+  setting: 200,            // Bar atmosphere
+  driftCorrection: 200,    // Voice corrections
+  memories: 1200,          // Framed memories (reduced to make room)
+  personaMemories: 200,    // Persona's independent knowledge (NEW - Principle VI)
+  buffer: 200              // Safety margin
 };
 
 /**
@@ -222,6 +229,130 @@ async function safeRelationshipFetch(personaId, userId, sessionId) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Persona Autonomy Helpers (Constitution Principle VI)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Fetch persona's relationships with other personas (for council context).
+ * Formats as natural language hints about who they get along with.
+ *
+ * @param {string} personaId - Persona UUID
+ * @param {string[]} [relevantPersonaIds] - Optional filter for council participants
+ * @param {string} sessionId - Session UUID for logging
+ * @returns {Promise<string|null>} Framed persona relationships or null
+ */
+async function safePersonaRelationsFetch(personaId, relevantPersonaIds = null, sessionId = null) {
+  const startTime = Date.now();
+
+  try {
+    const network = await getPersonaNetwork(personaId);
+
+    if (!network || network.length === 0) {
+      return null;
+    }
+
+    // Filter to relevant personas if specified (for councils)
+    const relevantNetwork = relevantPersonaIds
+      ? network.filter(r => relevantPersonaIds.includes(r.personaId))
+      : network.slice(0, 5);  // Top 5 strongest relationships
+
+    if (relevantNetwork.length === 0) {
+      return null;
+    }
+
+    // Frame as natural language
+    const frames = relevantNetwork.map(r => {
+      const affinityWord = r.affinityScore > 0.5 ? 'trust'
+        : r.affinityScore > 0 ? 'respect'
+        : r.affinityScore > -0.3 ? 'are cautious of'
+        : 'distrust';
+
+      return `You ${affinityWord} ${r.personaName}.`;
+    });
+
+    await logOperation('persona_relations_fetch', {
+      sessionId,
+      personaId,
+      details: {
+        relationships_included: relevantNetwork.length,
+        filtered_by_council: !!relevantPersonaIds
+      },
+      durationMs: Date.now() - startTime,
+      success: true
+    });
+
+    return frames.join(' ');
+  } catch (error) {
+    await logOperation('error_graceful', {
+      sessionId,
+      personaId,
+      details: {
+        error_type: 'persona_relations_fetch_failure',
+        error_message: error.message,
+        fallback_used: 'null'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    return null;
+  }
+}
+
+/**
+ * Fetch persona's independent memories (knowledge not tied to users).
+ *
+ * @param {string} personaId - Persona UUID
+ * @param {string} sessionId - Session UUID for logging
+ * @returns {Promise<string|null>} Framed persona memories or null
+ */
+async function safePersonaMemoriesFetch(personaId, sessionId = null) {
+  const startTime = Date.now();
+
+  try {
+    // Get top memories by importance
+    const memories = await getPersonaMemories(personaId, {
+      limit: 5,
+      minImportance: 0.5
+    });
+
+    if (!memories || memories.length === 0) {
+      return null;
+    }
+
+    // Frame as natural language using persona-memory helper
+    const framed = framePersonaMemories(memories, CONTEXT_BUDGET.personaMemories);
+
+    await logOperation('persona_memories_fetch', {
+      sessionId,
+      personaId,
+      details: {
+        memories_included: memories.length,
+        total_characters: framed?.length || 0
+      },
+      durationMs: Date.now() - startTime,
+      success: true
+    });
+
+    return framed || null;
+  } catch (error) {
+    await logOperation('error_graceful', {
+      sessionId,
+      personaId,
+      details: {
+        error_type: 'persona_memories_fetch_failure',
+        error_message: error.message,
+        fallback_used: 'null'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    return null;
+  }
+}
+
 /**
  * Get setting context from database or use default.
  *
@@ -319,10 +450,17 @@ export async function assembleContext(params) {
       ? await compileUserSetting(userId, personaId, sessionId)
       : null;
 
-    // Step 6: Assemble within token budget
+    // Step 6: Fetch persona autonomy components (Constitution Principle VI)
+    // These are persona-independent knowledge and inter-persona relationships
+    const personaRelations = await safePersonaRelationsFetch(personaId, null, sessionId);
+    const personaMemories = await safePersonaMemoriesFetch(personaId, sessionId);
+
+    // Step 7: Assemble within token budget
     const components = {
       memories: framedMemories || null,
       relationship: relationshipHints || null,
+      personaRelations: personaRelations || null,
+      personaMemories: personaMemories || null,
       driftCorrection: driftCorrection || null,
       setting: setting || null
     };
@@ -330,6 +468,8 @@ export async function assembleContext(params) {
     // Calculate token usage
     let totalTokens = 0;
     totalTokens += estimateTokens(components.relationship);
+    totalTokens += estimateTokens(components.personaRelations);
+    totalTokens += estimateTokens(components.personaMemories);
     totalTokens += estimateTokens(components.setting);
     totalTokens += estimateTokens(components.driftCorrection);
 
@@ -359,6 +499,7 @@ export async function assembleContext(params) {
     }
 
     // Assemble final system prompt
+    // Order: setting → user relationship → persona relationships → memories → persona memories → drift
     const parts = [];
 
     if (components.setting) {
@@ -369,8 +510,16 @@ export async function assembleContext(params) {
       parts.push('\n' + components.relationship);
     }
 
+    if (components.personaRelations) {
+      parts.push('\n' + components.personaRelations);
+    }
+
     if (components.memories) {
       parts.push('\n' + components.memories);
+    }
+
+    if (components.personaMemories) {
+      parts.push('\n' + components.personaMemories);
     }
 
     if (components.driftCorrection) {
@@ -659,6 +808,186 @@ function calculateTopicDepth(messages) {
   const questionScore = hasDeepQuestions ? 0.3 : 0;
 
   return Math.min(lengthScore + questionScore, 1);
+}
+
+/**
+ * Assemble context for multi-persona council sessions.
+ * Each persona receives awareness of their relationships with other participants.
+ *
+ * @param {Object} params - Council assembly parameters
+ * @param {string} params.personaId - UUID of the persona being assembled for
+ * @param {string} params.personaName - Name of the persona
+ * @param {string} params.userId - UUID of the user (optional for councils)
+ * @param {string[]} params.participantIds - UUIDs of all council participants
+ * @param {string[]} params.participantNames - Names of all council participants
+ * @param {string} params.sessionId - Council session UUID
+ * @param {string} params.topic - Council topic/question
+ * @param {string} params.councilType - Type: 'council', 'dialectic', 'familia', etc.
+ * @param {Object} [params.councilState] - Current council state machine position
+ * @returns {Promise<Object>} Council context for this persona
+ *
+ * @example
+ * const context = await assembleCouncilContext({
+ *   personaId: 'hegel-uuid',
+ *   personaName: 'Hegel',
+ *   userId: 'user-456',
+ *   participantIds: ['socrates-uuid', 'diogenes-uuid'],
+ *   participantNames: ['Socrates', 'Diogenes'],
+ *   sessionId: 'council-789',
+ *   topic: 'What is the nature of truth?',
+ *   councilType: 'council'
+ * });
+ */
+export async function assembleCouncilContext(params) {
+  const startTime = Date.now();
+  const {
+    personaId,
+    personaName,
+    userId,
+    participantIds,
+    participantNames,
+    sessionId,
+    topic,
+    councilType,
+    councilState = null
+  } = params;
+
+  try {
+    // Step 1: Get persona's relationships with other council participants
+    const personaRelations = await safePersonaRelationsFetch(personaId, participantIds, sessionId);
+
+    // Step 2: Get persona's independent memories (what they know about the topic)
+    const personaMemories = await safePersonaMemoriesFetch(personaId, sessionId);
+
+    // Step 3: Get user relationship if available (for grounded councils)
+    let userRelationship = null;
+    if (userId) {
+      userRelationship = await safeRelationshipFetch(personaId, userId, sessionId);
+    }
+
+    // Step 4: Build council-specific framing
+    const otherParticipants = participantNames.filter(n => n !== personaName);
+    const councilFrame = buildCouncilFrame(councilType, topic, otherParticipants, councilState);
+
+    // Step 5: Assemble components
+    const components = {
+      councilFrame,
+      personaRelations: personaRelations || null,
+      personaMemories: personaMemories || null,
+      userRelationship: userRelationship ? `The one who called this council: ${userRelationship.trust_level}.` : null
+    };
+
+    // Step 6: Build system prompt
+    const parts = [];
+
+    parts.push(councilFrame);
+
+    if (components.personaRelations) {
+      parts.push('\n' + components.personaRelations);
+    }
+
+    if (components.personaMemories) {
+      parts.push('\n' + components.personaMemories);
+    }
+
+    if (components.userRelationship) {
+      parts.push('\n' + components.userRelationship);
+    }
+
+    const systemPrompt = parts.join('').trim();
+    const totalTokens = estimateTokens(systemPrompt);
+
+    await logOperation('council_context_assembly', {
+      sessionId,
+      personaId,
+      details: {
+        council_type: councilType,
+        participant_count: participantIds.length,
+        has_persona_relations: !!personaRelations,
+        has_persona_memories: !!personaMemories,
+        has_user_relationship: !!userRelationship,
+        total_tokens: totalTokens
+      },
+      durationMs: Date.now() - startTime,
+      success: true
+    });
+
+    return {
+      systemPrompt,
+      components,
+      metadata: {
+        sessionId,
+        personaId,
+        personaName,
+        councilType,
+        participantCount: participantIds.length,
+        totalTokens,
+        assemblyDurationMs: Date.now() - startTime
+      }
+    };
+
+  } catch (error) {
+    await logOperation('error_graceful', {
+      sessionId,
+      personaId,
+      details: {
+        error_type: 'council_context_assembly_failure',
+        error_message: error.message,
+        fallback_used: 'minimal_council_frame'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    // Minimal fallback
+    const fallbackFrame = buildCouncilFrame(councilType, topic, participantNames.filter(n => n !== personaName), null);
+
+    return {
+      systemPrompt: fallbackFrame,
+      components: { councilFrame: fallbackFrame },
+      metadata: {
+        sessionId,
+        personaId,
+        personaName,
+        councilType,
+        participantCount: participantIds.length,
+        totalTokens: estimateTokens(fallbackFrame),
+        assemblyDurationMs: Date.now() - startTime,
+        fallback: true
+      }
+    };
+  }
+}
+
+/**
+ * Build council-type-specific framing text.
+ *
+ * @param {string} councilType - Type of council
+ * @param {string} topic - Topic/question
+ * @param {string[]} otherParticipants - Names of other participants
+ * @param {Object} councilState - Current state (optional)
+ * @returns {string} Council frame text
+ */
+function buildCouncilFrame(councilType, topic, otherParticipants, councilState) {
+  const othersText = otherParticipants.length > 0
+    ? `with ${otherParticipants.join(', ')}`
+    : '';
+
+  const stateText = councilState?.currentPhase
+    ? ` Phase: ${councilState.currentPhase}.`
+    : '';
+
+  const frames = {
+    council: `You are gathered at O Fim ${othersText} to discuss: "${topic}"${stateText}`,
+    dialectic: `The dialectic process is underway ${othersText}. The thesis: "${topic}"${stateText}`,
+    familia: `The family has been called to council ${othersText}. The matter: "${topic}"${stateText}`,
+    heteronyms: `The fragments gather ${othersText}. The question: "${topic}"${stateText}`,
+    scry: `The Enochian protocol is invoked ${othersText}. Seeking: "${topic}"${stateText}`,
+    magick: `The narrative ritual begins ${othersText}. The situation: "${topic}"${stateText}`,
+    war: `Strategy session convened ${othersText}. The conflict: "${topic}"${stateText}`
+  };
+
+  return frames[councilType] || frames.council;
 }
 
 /**

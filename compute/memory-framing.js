@@ -20,8 +20,10 @@ let pool = null;
  */
 function getPool() {
   if (!pool) {
-    const connectionString = process.env.DATABASE_URL ||
-      'postgres://architect:matrix_secret@localhost:5432/aeon_matrix';
+    if (!process.env.DATABASE_URL) {
+      throw new Error('[MemoryFraming] DATABASE_URL environment variable is required');
+    }
+    const connectionString = process.env.DATABASE_URL;
 
     pool = new Pool({
       connectionString,
