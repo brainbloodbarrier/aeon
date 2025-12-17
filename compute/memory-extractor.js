@@ -450,6 +450,14 @@ export async function storeSessionMemories(userId, personaId, memories) {
     return [];
   }
 
+  // Batch size validation: PostgreSQL has a 65,535 parameter limit
+  // With 5 parameters per memory, max safe batch is 13,000
+  const MAX_BATCH_SIZE = 13000;
+  if (memories.length > MAX_BATCH_SIZE) {
+    console.warn(`[MemoryExtractor] Batch size ${memories.length} exceeds limit, truncating to ${MAX_BATCH_SIZE}`);
+    memories = memories.slice(0, MAX_BATCH_SIZE);
+  }
+
   try {
     const db = getPool();
     const ids = [];

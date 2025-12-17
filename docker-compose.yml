@@ -19,7 +19,7 @@ services:
     environment:
       POSTGRES_DB: aeon_matrix
       POSTGRES_USER: architect
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-matrix_secret}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD environment variable is required}
     volumes:
       - aeon_memory:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d
@@ -42,7 +42,7 @@ services:
     image: neo4j:5-community
     container_name: aeon-matrix-graph
     environment:
-      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-matrix_graph}
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?NEO4J_PASSWORD environment variable is required}
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_dbms_memory_pagecache_size: 512M
       NEO4J_dbms_memory_heap_initial__size: 512M
@@ -57,6 +57,30 @@ services:
     profiles:
       - graph
     restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════
+  # COMPUTE LAYER - Node.js sandbox for persona operations
+  # Soul files are mounted READ-ONLY per Constitution Principle I
+  # ═══════════════════════════════════════════════════════════════
+  aeon-compute:
+    image: node:18-alpine
+    container_name: aeon-matrix-compute
+    working_dir: /app
+    volumes:
+      - ./compute:/app/compute:ro
+      - ./personas:/app/personas:ro  # IMMUTABLE: Soul files read-only
+      - ./scripts:/app/scripts:ro
+    environment:
+      DATABASE_URL: postgres://architect:${DB_PASSWORD}@aeon-db:5432/aeon_matrix
+      PERSONAS_DIR: /app/personas
+    networks:
+      - matrix
+    depends_on:
+      aeon-db:
+        condition: service_healthy
+    profiles:
+      - compute
+    command: ["tail", "-f", "/dev/null"]  # Keep container running for MCP access
 
   # ═══════════════════════════════════════════════════════════════
   # NOTE: MCP Servers are NOT Docker services

@@ -18,6 +18,7 @@ import { ensureRelationship, updateFamiliarity } from './relationship-tracker.js
 import { extractSessionMemories, storeSessionMemories } from './memory-extractor.js';
 import { compileUserSetting } from './setting-preserver.js';
 import { extractAndSaveSettings } from './setting-extractor.js';
+import { withTransaction } from './db-pool.js';
 const { Pool } = pg;
 
 let pool = null;
@@ -475,6 +476,19 @@ export async function completeSession(sessionData) {
   const { sessionId, userId, personaId, personaName, messages, startedAt, endedAt } = sessionData;
 
   try {
+    // Idempotency check: verify session hasn't already been completed
+    // This prevents duplicate processing if completeSession is called multiple times
+    const alreadyCompleted = await checkSessionCompleted(sessionId);
+    if (alreadyCompleted) {
+      return {
+        relationship: null,
+        memoriesStored: 0,
+        settingsExtracted: [],
+        sessionQuality: null,
+        skipped: 'already_completed'
+      };
+    }
+
     // Calculate session quality metrics
     const sessionQuality = {
       messageCount: messages.length,
@@ -482,6 +496,13 @@ export async function completeSession(sessionData) {
       hasFollowUps: detectFollowUps(messages),
       topicDepth: calculateTopicDepth(messages)
     };
+
+    // NOTE: These operations are not wrapped in a single transaction because
+    // each module manages its own connection. This is a design trade-off:
+    // - Pro: Modules remain decoupled and independently testable
+    // - Pro: Partial failures don't block other operations
+    // - Con: If process crashes mid-completion, state may be partially updated
+    // The idempotency check above mitigates the most common issue (duplicate processing).
 
     // Update familiarity (may trigger trust level change)
     const relationshipResult = await updateFamiliarity(userId, personaId, sessionQuality);
@@ -559,6 +580,34 @@ export async function completeSession(sessionData) {
       sessionQuality: null,
       error: error.message
     };
+  }
+}
+
+/**
+ * Check if a session has already been completed (idempotency check).
+ * Uses operator_logs to detect prior session_complete operations.
+ *
+ * @param {string} sessionId - Session UUID to check
+ * @returns {Promise<boolean>} True if session already completed
+ */
+async function checkSessionCompleted(sessionId) {
+  if (!sessionId) return false;
+
+  try {
+    const db = getPool();
+    const result = await db.query(
+      `SELECT 1 FROM operator_logs
+       WHERE session_id = $1
+         AND operation = 'session_complete'
+         AND success = true
+       LIMIT 1`,
+      [sessionId]
+    );
+    return result.rows.length > 0;
+  } catch (error) {
+    // On error, allow processing to continue (fail open)
+    console.error('[ContextAssembler] Idempotency check failed:', error.message);
+    return false;
   }
 }
 

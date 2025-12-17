@@ -88,11 +88,18 @@ export async function logOperation(operation, params = {}) {
       ]
     );
   } catch (error) {
-    // Fire-and-forget: log error but don't throw
-    console.error('[OperatorLogger] Failed to log operation:', {
+    // Fire-and-forget: log to stderr in structured format for container log capture
+    // This fallback ensures operations are still recorded even if database fails
+    console.error(JSON.stringify({
+      _aeon_log_fallback: true,
+      source: 'operator_logger',
       operation,
-      error: error.message
-    });
+      sessionId: params.sessionId || null,
+      personaId: params.personaId || null,
+      error: error.message,
+      errorCode: error.code,
+      timestamp: new Date().toISOString()
+    }));
   }
 }
 
@@ -156,11 +163,20 @@ export async function logOperationBatch(operations) {
       client.release();
     }
   } catch (error) {
-    // Fire-and-forget: log error but don't throw
-    console.error('[OperatorLogger] Failed to log batch:', {
-      operationCount: operations.length,
-      error: error.message
-    });
+    // Fire-and-forget: log to stderr in structured format for container log capture
+    // This fallback ensures operations are still recorded even if database fails
+    console.error(JSON.stringify({
+      _aeon_log_fallback: true,
+      source: 'operator_logger_batch',
+      operations: operations.map(o => ({
+        operation: o.operation,
+        sessionId: o.params?.sessionId || null,
+        personaId: o.params?.personaId || null
+      })),
+      error: error.message,
+      errorCode: error.code,
+      timestamp: new Date().toISOString()
+    }));
   }
 }
 
