@@ -5,7 +5,12 @@
  * Feature: 005-setting-preservation
  */
 
-// Mock database before importing module
+import { jest, describe, it, expect, beforeEach, beforeAll } from '@jest/globals';
+
+// Set DATABASE_URL before imports (required by modules after security hardening)
+process.env.DATABASE_URL = 'postgres://test:test@localhost:5432/test';
+
+// Mock state
 let mockQueryResults = [];
 let queryCalls = [];
 
@@ -20,29 +25,34 @@ const mockPool = {
   end: jest.fn()
 };
 
-jest.mock('pg', () => ({
+// ESM-compatible module mocking (must be before dynamic imports)
+jest.unstable_mockModule('pg', () => ({
+  default: { Pool: jest.fn(() => mockPool) },
   Pool: jest.fn(() => mockPool)
 }));
 
-jest.mock('../../compute/operator-logger.js', () => ({
+jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
   logOperation: jest.fn()
 }));
 
-// Import after mocks
-import {
-  loadUserSettings,
-  saveUserSettings,
-  loadPersonaLocation,
-  savePersonaLocation,
-  compileUserSetting,
-  getSystemConfig
-} from '../../compute/setting-preserver.js';
+// Module exports (populated in beforeAll)
+let loadUserSettings, saveUserSettings, loadPersonaLocation, savePersonaLocation, compileUserSetting, getSystemConfig;
+
+beforeAll(async () => {
+  const module = await import('../../compute/setting-preserver.js');
+  loadUserSettings = module.loadUserSettings;
+  saveUserSettings = module.saveUserSettings;
+  loadPersonaLocation = module.loadPersonaLocation;
+  savePersonaLocation = module.savePersonaLocation;
+  compileUserSetting = module.compileUserSetting;
+  getSystemConfig = module.getSystemConfig;
+});
 
 describe('Setting Preserver', () => {
   beforeEach(() => {
     mockQueryResults = [];
     queryCalls = [];
-    jest.clearAllMocks();
+    mockPool.query.mockClear();
   });
 
   describe('loadUserSettings()', () => {

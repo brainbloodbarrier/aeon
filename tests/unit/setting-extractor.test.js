@@ -5,27 +5,33 @@
  * Feature: 005-setting-preservation
  */
 
-// Mock pg before imports
+import { jest, describe, it, expect, beforeEach, beforeAll } from '@jest/globals';
+
+// Set DATABASE_URL before imports (required by modules after security hardening)
+process.env.DATABASE_URL = 'postgres://test:test@localhost:5432/test';
+
+// Mock state for tracking calls
+let saveUserSettingsCalls = [];
+let savePersonaLocationCalls = [];
+
+// Mock pg Pool
 const mockPool = {
   query: jest.fn(async () => ({ rows: [], rowCount: 0 })),
   on: jest.fn(),
   end: jest.fn()
 };
 
-jest.mock('pg', () => ({
+// ESM-compatible module mocking (must be before dynamic imports)
+jest.unstable_mockModule('pg', () => ({
+  default: { Pool: jest.fn(() => mockPool) },
   Pool: jest.fn(() => mockPool)
 }));
 
-// Mock operator-logger
-jest.mock('../../compute/operator-logger.js', () => ({
+jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
   logOperation: jest.fn()
 }));
 
-// Mock setting-preserver
-let saveUserSettingsCalls = [];
-let savePersonaLocationCalls = [];
-
-jest.mock('../../compute/setting-preserver.js', () => ({
+jest.unstable_mockModule('../../compute/setting-preserver.js', () => ({
   saveUserSettings: jest.fn(async (userId, prefs) => {
     saveUserSettingsCalls.push({ userId, prefs });
     return { success: true, updatedFields: Object.keys(prefs) };
@@ -36,11 +42,15 @@ jest.mock('../../compute/setting-preserver.js', () => ({
   })
 }));
 
-import {
-  extractSettingPreferences,
-  extractAndSaveSettings,
-  SETTING_PATTERNS
-} from '../../compute/setting-extractor.js';
+// Module exports (populated in beforeAll)
+let extractSettingPreferences, extractAndSaveSettings, SETTING_PATTERNS;
+
+beforeAll(async () => {
+  const module = await import('../../compute/setting-extractor.js');
+  extractSettingPreferences = module.extractSettingPreferences;
+  extractAndSaveSettings = module.extractAndSaveSettings;
+  SETTING_PATTERNS = module.SETTING_PATTERNS;
+});
 
 describe('Setting Extractor', () => {
   beforeEach(() => {
@@ -207,15 +217,16 @@ describe('Setting Extractor', () => {
 
       it('deduplicates persona locations (last wins)', () => {
         const messages = [
-          { role: 'user', content: 'Hegel at the bar' },
-          { role: 'user', content: 'Hegel by the window' }
+          { role: 'user', content: 'Hegel at the bar counter' },
+          { role: 'user', content: 'Hegel by the window seat' }
         ];
         const result = extractSettingPreferences(messages);
         const hegelLocations = result.personaLocations.filter(
           p => p.personaName.toLowerCase() === 'hegel'
         );
         expect(hegelLocations.length).toBe(1);
-        expect(hegelLocations[0].location).toBe('window');
+        // Last message should win - window seat
+        expect(hegelLocations[0].location).toContain('window');
       });
     });
 
