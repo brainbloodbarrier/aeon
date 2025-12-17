@@ -316,7 +316,23 @@ function calculateConfidence(prefs) {
  */
 export async function extractAndSaveSettings(sessionData) {
   const startTime = Date.now();
+
+  // Input validation: ensure sessionData is a valid object with required fields
+  if (!sessionData || typeof sessionData !== 'object') {
+    return { extracted: null, saved: { userSettings: false, personaLocation: false }, fieldsUpdated: [] };
+  }
+
   const { sessionId, userId, personaId, personaName, messages } = sessionData;
+
+  // Validate messages array exists and is non-empty
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return { extracted: null, saved: { userSettings: false, personaLocation: false }, fieldsUpdated: [] };
+  }
+
+  // Validate required IDs
+  if (!userId || !personaId) {
+    return { extracted: null, saved: { userSettings: false, personaLocation: false }, fieldsUpdated: [] };
+  }
 
   try {
     // Extract preferences

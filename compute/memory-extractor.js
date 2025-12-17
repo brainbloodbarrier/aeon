@@ -50,8 +50,10 @@ export const IMPORTANCE_WEIGHTS = {
  */
 function getPool() {
   if (!pool) {
-    const connectionString = process.env.DATABASE_URL ||
-      'postgres://architect:matrix_secret@localhost:5432/aeon_matrix';
+    if (!process.env.DATABASE_URL) {
+      throw new Error('[MemoryExtractor] DATABASE_URL environment variable is required');
+    }
+    const connectionString = process.env.DATABASE_URL;
 
     pool = new Pool({
       connectionString,
@@ -448,6 +450,14 @@ export async function storeSessionMemories(userId, personaId, memories) {
 
   if (!memories || memories.length === 0) {
     return [];
+  }
+
+  // Batch size validation: PostgreSQL has a 65,535 parameter limit
+  // With 5 parameters per memory, max safe batch is 13,000
+  const MAX_BATCH_SIZE = 13000;
+  if (memories.length > MAX_BATCH_SIZE) {
+    console.warn(`[MemoryExtractor] Batch size ${memories.length} exceeds limit, truncating to ${MAX_BATCH_SIZE}`);
+    memories = memories.slice(0, MAX_BATCH_SIZE);
   }
 
   try {

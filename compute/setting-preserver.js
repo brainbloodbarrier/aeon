@@ -20,8 +20,10 @@ let pool = null;
  */
 function getPool() {
   if (!pool) {
-    const connectionString = process.env.DATABASE_URL ||
-      'postgres://architect:matrix_secret@localhost:5432/aeon_matrix';
+    if (!process.env.DATABASE_URL) {
+      throw new Error('[SettingPreserver] DATABASE_URL environment variable is required');
+    }
+    const connectionString = process.env.DATABASE_URL;
 
     pool = new Pool({
       connectionString,
@@ -51,6 +53,24 @@ const DEFAULTS = {
  * Default setting template when no preferences exist.
  */
 const DEFAULT_SETTING = 'It is 2 AM at O Fim. The humidity is eternal. Chopp flows cold. You exist in this moment.';
+
+/**
+ * Explicit mapping of preference keys to database columns.
+ * Security: Prevents SQL injection by only allowing known column names.
+ */
+const COLUMN_MAP = {
+  timeOfDay: 'time_of_day',
+  musicPreference: 'music_preference',
+  atmosphereDescriptors: 'atmosphere_descriptors',
+  locationPreference: 'location_preference',
+  customSettingText: 'custom_setting_text',
+  systemConfig: 'system_config'
+};
+
+/**
+ * Keys that require JSON serialization before storage.
+ */
+const JSON_COLUMNS = new Set(['atmosphereDescriptors', 'systemConfig']);
 
 /**
  * Load stored setting preferences for a user.
@@ -121,62 +141,37 @@ export async function saveUserSettings(userId, preferences) {
     return { success: false, updatedFields: [] };
   }
 
-  const updatedFields = [];
-
   try {
     const db = getPool();
 
-    // Build dynamic update clause
-    const updates = [];
-    const values = [userId];
-    let paramIndex = 2;
+    // Build columns and values from validated keys only (prevents SQL injection)
+    const entries = Object.entries(preferences)
+      .filter(([key, value]) => COLUMN_MAP[key] && value !== undefined);
 
-    if (preferences.timeOfDay !== undefined) {
-      updates.push(`time_of_day = $${paramIndex++}`);
-      values.push(preferences.timeOfDay);
-      updatedFields.push('timeOfDay');
-    }
-
-    if (preferences.musicPreference !== undefined) {
-      updates.push(`music_preference = $${paramIndex++}`);
-      values.push(preferences.musicPreference);
-      updatedFields.push('musicPreference');
-    }
-
-    if (preferences.atmosphereDescriptors !== undefined) {
-      updates.push(`atmosphere_descriptors = $${paramIndex++}`);
-      values.push(JSON.stringify(preferences.atmosphereDescriptors));
-      updatedFields.push('atmosphereDescriptors');
-    }
-
-    if (preferences.locationPreference !== undefined) {
-      updates.push(`location_preference = $${paramIndex++}`);
-      values.push(preferences.locationPreference);
-      updatedFields.push('locationPreference');
-    }
-
-    if (preferences.customSettingText !== undefined) {
-      updates.push(`custom_setting_text = $${paramIndex++}`);
-      values.push(preferences.customSettingText);
-      updatedFields.push('customSettingText');
-    }
-
-    if (preferences.systemConfig !== undefined) {
-      updates.push(`system_config = $${paramIndex++}`);
-      values.push(JSON.stringify(preferences.systemConfig));
-      updatedFields.push('systemConfig');
-    }
-
-    if (updates.length === 0) {
+    if (entries.length === 0) {
       return { success: true, updatedFields: [] };
     }
 
-    // Upsert query
+    // Extract validated column names and prepare values
+    const columns = entries.map(([key]) => COLUMN_MAP[key]);
+    const updatedFields = entries.map(([key]) => key);
+    const values = [userId];
+
+    entries.forEach(([key, value]) => {
+      values.push(JSON_COLUMNS.has(key) ? JSON.stringify(value) : value);
+    });
+
+    // Build parameterized placeholders
+    const insertColumns = ['user_id', ...columns].join(', ');
+    const insertPlaceholders = values.map((_, i) => `$${i + 1}`).join(', ');
+    const updateClauses = columns.map((col, i) => `${col} = $${i + 2}`).join(', ');
+
+    // Upsert query with explicit column names (no string manipulation)
     const query = `
-      INSERT INTO user_settings (user_id, ${updates.map(u => u.split(' = ')[0]).join(', ')})
-      VALUES ($1, ${values.slice(1).map((_, i) => `$${i + 2}`).join(', ')})
+      INSERT INTO user_settings (${insertColumns})
+      VALUES (${insertPlaceholders})
       ON CONFLICT (user_id) DO UPDATE SET
-        ${updates.join(', ')},
+        ${updateClauses},
         updated_at = NOW()
       RETURNING id
     `;
