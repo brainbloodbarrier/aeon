@@ -21,6 +21,14 @@ import { extractAndSaveSettings } from './setting-extractor.js';
 // Persona Autonomy imports (Constitution Principle VI)
 import { getPersonaNetwork } from './persona-relationship-tracker.js';
 import { getPersonaMemories, framePersonaMemories, getAllOpinions } from './persona-memory.js';
+// Constitution Principle VII: Temporal Consciousness
+import { generateTemporalContext, frameTemporalContext, touchTemporalState } from './temporal-awareness.js';
+// Ambient atmosphere and entropy (Phase 1 Pynchon Stack)
+import { generateAmbientDetails, frameAmbientContext } from './ambient-generator.js';
+import { getEntropyState, applySessionEntropy, frameEntropyContext } from './entropy-tracker.js';
+// Pynchon Layer: Preterite memory and Zone boundaries
+import { attemptSurface, classifyMemoryElection, consignToPreterite, framePreteriteContext } from './preterite-memory.js';
+import { detectZoneApproach, frameZoneContext } from './zone-boundary-detector.js';
 const { Pool } = pg;
 
 let pool = null;
@@ -50,17 +58,24 @@ function getPool() {
 
 /**
  * Token budget allocation for context components.
- * Updated for Constitution Principle VI (Persona Autonomy).
+ * Updated for Constitution Principle VI (Persona Autonomy) and VII (Temporal Consciousness).
+ * Also includes Pynchon Stack Phase 1 components.
  */
 const CONTEXT_BUDGET = {
   soulMarkers: 500,        // Highest priority - persona voice markers
-  relationship: 300,       // Behavioral hints (user relationship)
-  personaRelations: 200,   // Persona-to-persona relationships (NEW - Principle VI)
-  setting: 200,            // Bar atmosphere
-  driftCorrection: 200,    // Voice corrections
-  memories: 1200,          // Framed memories (reduced to make room)
-  personaMemories: 200,    // Persona's independent knowledge (NEW - Principle VI)
-  buffer: 200              // Safety margin
+  relationship: 250,       // Behavioral hints (user relationship)
+  personaRelations: 150,   // Persona-to-persona relationships (Principle VI)
+  setting: 150,            // Bar atmosphere (reduced, supplemented by ambient)
+  driftCorrection: 150,    // Voice corrections
+  memories: 1000,          // Framed memories (reduced to make room for Pynchon)
+  personaMemories: 150,    // Persona's independent knowledge (Principle VI)
+  // Phase 1 Pynchon Stack + Temporal Consciousness
+  temporal: 150,           // Time gaps, reflections (Principle VII)
+  ambient: 200,            // Music, weather, micro-events
+  entropy: 100,            // Decay effects, static
+  preterite: 150,          // Surfacing forgotten memories (Pynchon)
+  zoneResistance: 100,     // Boundary push-back (Pynchon)
+  buffer: 150              // Safety margin
 };
 
 /**
@@ -353,6 +368,268 @@ async function safePersonaMemoriesFetch(personaId, sessionId = null) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 1 Pynchon Stack + Temporal Consciousness Helpers
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Safely fetch temporal context for a persona.
+ * Includes time gaps, reflections on absence, and temporal state updates.
+ *
+ * Constitution: Principle VII (Temporal Consciousness)
+ *
+ * @param {string} personaId - Persona UUID
+ * @param {string} personaSlug - Persona slug for reflection generation
+ * @param {string} sessionId - Session UUID for logging
+ * @returns {Promise<string|null>} Framed temporal context or null
+ */
+async function safeTemporalFetch(personaId, personaSlug, sessionId) {
+  const startTime = Date.now();
+
+  try {
+    const temporalContext = await generateTemporalContext(personaId, personaSlug, new Date(), sessionId);
+
+    if (!temporalContext || temporalContext.gapLevel === 'none') {
+      return null;
+    }
+
+    const framed = frameTemporalContext(temporalContext);
+
+    await logOperation('temporal_context_fetch', {
+      sessionId,
+      personaId,
+      details: {
+        gap_level: temporalContext.gapLevel,
+        gap_ms: temporalContext.gapMs,
+        has_reflection: !!temporalContext.reflection
+      },
+      durationMs: Date.now() - startTime,
+      success: true
+    });
+
+    return framed || null;
+  } catch (error) {
+    await logOperation('error_graceful', {
+      sessionId,
+      personaId,
+      details: {
+        error_type: 'temporal_context_failure',
+        error_message: error.message,
+        fallback_used: 'null'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    return null;
+  }
+}
+
+/**
+ * Safely fetch ambient details for a session.
+ * Includes music, weather, micro-events based on time and entropy.
+ *
+ * @param {string} sessionId - Session UUID
+ * @param {string} personaId - Persona UUID (optional context)
+ * @returns {Promise<string|null>} Framed ambient context or null
+ */
+async function safeAmbientFetch(sessionId, personaId = null) {
+  const startTime = Date.now();
+
+  try {
+    const ambientDetails = await generateAmbientDetails(sessionId, personaId);
+
+    if (!ambientDetails || ambientDetails.events.length === 0) {
+      return null;
+    }
+
+    const framed = frameAmbientContext(ambientDetails);
+
+    await logOperation('ambient_context_fetch', {
+      sessionId,
+      personaId,
+      details: {
+        event_count: ambientDetails.events.length,
+        time_of_night: ambientDetails.timeOfNight,
+        entropy_level: ambientDetails.entropyLevel
+      },
+      durationMs: Date.now() - startTime,
+      success: true
+    });
+
+    return framed || null;
+  } catch (error) {
+    await logOperation('error_graceful', {
+      sessionId,
+      personaId,
+      details: {
+        error_type: 'ambient_context_failure',
+        error_message: error.message,
+        fallback_used: 'null'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    return null;
+  }
+}
+
+/**
+ * Safely fetch entropy context.
+ * Includes decay effects, static markers, system degradation hints.
+ *
+ * @param {string} sessionId - Session UUID for logging
+ * @returns {Promise<string|null>} Framed entropy context or null
+ */
+async function safeEntropyFetch(sessionId) {
+  const startTime = Date.now();
+
+  try {
+    const entropyState = await getEntropyState();
+
+    if (!entropyState || entropyState.level < 0.2) {
+      // Low entropy - no visible effects
+      return null;
+    }
+
+    const framed = frameEntropyContext(entropyState);
+
+    await logOperation('entropy_context_fetch', {
+      sessionId,
+      details: {
+        entropy_level: entropyState.level,
+        entropy_state: entropyState.state,
+        effect_count: entropyState.effects?.length || 0
+      },
+      durationMs: Date.now() - startTime,
+      success: true
+    });
+
+    return framed || null;
+  } catch (error) {
+    await logOperation('error_graceful', {
+      sessionId,
+      details: {
+        error_type: 'entropy_context_failure',
+        error_message: error.message,
+        fallback_used: 'null'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    return null;
+  }
+}
+
+/**
+ * Safely attempt to surface preterite memories.
+ * 15% chance per session for forgotten memories to emerge, corrupted by entropy.
+ *
+ * Pynchon Layer: The preterite—passed over, deemed insignificant—occasionally surfaces.
+ *
+ * @param {string} personaId - Persona UUID
+ * @param {string} userId - User UUID
+ * @param {string} sessionId - Session UUID for logging
+ * @returns {Promise<string|null>} Framed preterite context or null
+ */
+async function safePreteriteFetch(personaId, userId, sessionId) {
+  const startTime = Date.now();
+
+  try {
+    const surfaceResult = await attemptSurface(personaId, userId, 2);
+
+    if (!surfaceResult || !surfaceResult.surfaced) {
+      return null;
+    }
+
+    const framed = framePreteriteContext(surfaceResult);
+
+    await logOperation('preterite_surface', {
+      sessionId,
+      personaId,
+      userId,
+      details: {
+        fragments_surfaced: surfaceResult.fragments?.length || 0,
+        corruption_applied: true
+      },
+      durationMs: Date.now() - startTime,
+      success: true
+    });
+
+    return framed || null;
+  } catch (error) {
+    await logOperation('error_graceful', {
+      sessionId,
+      personaId,
+      userId,
+      details: {
+        error_type: 'preterite_surface_failure',
+        error_message: error.message,
+        fallback_used: 'null'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    return null;
+  }
+}
+
+/**
+ * Safely detect Zone boundary approach and generate resistance.
+ * When users probe too close to meta-awareness, The Zone pushes back.
+ *
+ * Pynchon Layer: The system resists acknowledgment of its own nature.
+ *
+ * @param {string} query - User's current query
+ * @param {string} sessionId - Session UUID
+ * @param {string} personaId - Persona UUID
+ * @returns {Promise<string|null>} Framed zone resistance or null
+ */
+async function safeZoneDetection(query, sessionId, personaId) {
+  const startTime = Date.now();
+
+  try {
+    const zoneResponse = await detectZoneApproach(query, sessionId, personaId);
+
+    if (!zoneResponse || !zoneResponse.isApproaching) {
+      return null;
+    }
+
+    const framed = frameZoneContext(zoneResponse);
+
+    await logOperation('zone_boundary_detected', {
+      sessionId,
+      personaId,
+      details: {
+        proximity: zoneResponse.proximity,
+        triggers: zoneResponse.triggers,
+        resistance_level: zoneResponse.resistance?.level || 'none'
+      },
+      durationMs: Date.now() - startTime,
+      success: true
+    });
+
+    return framed || null;
+  } catch (error) {
+    await logOperation('error_graceful', {
+      sessionId,
+      personaId,
+      details: {
+        error_type: 'zone_detection_failure',
+        error_message: error.message,
+        fallback_used: 'null'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    return null;
+  }
+}
+
 /**
  * Get setting context from database or use default.
  *
@@ -386,14 +663,29 @@ async function getSettingContext(sessionId) {
 /**
  * Assemble invisible context for persona invocation.
  *
+ * Constitution Principles applied:
+ * - II: Invisible Infrastructure (silent logging, graceful fallbacks)
+ * - IV: Relationship Continuity (memories, familiarity)
+ * - V: Setting Preservation (personalized atmosphere)
+ * - VI: Persona Autonomy (persona knowledge, inter-persona relations)
+ * - VII: Temporal Consciousness (time gaps, reflections)
+ *
+ * Pynchon Stack Phase 1:
+ * - Ambient details (music, weather, micro-events)
+ * - Entropy effects (decay, static)
+ * - Preterite surfacing (forgotten memories)
+ * - Zone boundary resistance (meta-awareness deflection)
+ *
  * @param {Object} params - Assembly parameters
  * @param {string} params.personaId - UUID of the persona being invoked
+ * @param {string} params.personaSlug - Slug of the persona (for temporal reflections)
  * @param {string} params.userId - UUID of the user
  * @param {string} params.query - Current user query
  * @param {string} params.sessionId - UUID for this invocation session
  * @param {Object} [params.options] - Optional configuration
  * @param {number} [params.options.maxTokens=3000] - Maximum context tokens
  * @param {boolean} [params.options.includeSetting=true] - Include bar setting
+ * @param {boolean} [params.options.includePynchon=true] - Include Pynchon Stack layers
  * @param {Object} [params.previousResponse] - Previous persona response for drift detection
  * @param {Object} [params.soulMarkers] - Soul voice markers for drift detection
  *
@@ -402,6 +694,7 @@ async function getSettingContext(sessionId) {
  * @example
  * const context = await assembleContext({
  *   personaId: 'abc-123',
+ *   personaSlug: 'hegel',
  *   userId: 'user-456',
  *   query: 'What is the nature of being?',
  *   sessionId: 'session-789'
@@ -411,6 +704,7 @@ export async function assembleContext(params) {
   const startTime = Date.now();
   const {
     personaId,
+    personaSlug = null,
     userId,
     query,
     sessionId,
@@ -421,6 +715,7 @@ export async function assembleContext(params) {
 
   const maxTokens = options.maxTokens || 3000;
   const includeSetting = options.includeSetting !== false;
+  const includePynchon = options.includePynchon !== false;
 
   try {
     // Step 1: Fetch relationship state (with fallback)
@@ -453,25 +748,61 @@ export async function assembleContext(params) {
     // Step 6: Fetch persona autonomy components (Constitution Principle VI)
     // These are persona-independent knowledge and inter-persona relationships
     const personaRelations = await safePersonaRelationsFetch(personaId, null, sessionId);
-    const personaMemories = await safePersonaMemoriesFetch(personaId, sessionId);
+    const personaMemoriesContext = await safePersonaMemoriesFetch(personaId, sessionId);
 
-    // Step 7: Assemble within token budget
+    // Step 7: Fetch Temporal Consciousness (Constitution Principle VII)
+    const temporalContext = await safeTemporalFetch(personaId, personaSlug, sessionId);
+
+    // Step 8: Fetch Pynchon Stack Phase 1 components (if enabled)
+    let ambientContext = null;
+    let entropyContext = null;
+    let preteriteContext = null;
+    let zoneContext = null;
+
+    if (includePynchon) {
+      // Ambient details (music, weather, micro-events)
+      ambientContext = await safeAmbientFetch(sessionId, personaId);
+
+      // Entropy effects (decay, static)
+      entropyContext = await safeEntropyFetch(sessionId);
+
+      // Preterite surfacing (15% chance for forgotten memories)
+      preteriteContext = await safePreteriteFetch(personaId, userId, sessionId);
+
+      // Zone boundary detection (resistance to meta-awareness)
+      zoneContext = await safeZoneDetection(query, sessionId, personaId);
+    }
+
+    // Step 9: Assemble within token budget
     const components = {
+      // Core components
       memories: framedMemories || null,
       relationship: relationshipHints || null,
       personaRelations: personaRelations || null,
-      personaMemories: personaMemories || null,
+      personaMemories: personaMemoriesContext || null,
       driftCorrection: driftCorrection || null,
-      setting: setting || null
+      setting: setting || null,
+      // Principle VII: Temporal Consciousness
+      temporal: temporalContext || null,
+      // Pynchon Stack Phase 1
+      ambient: ambientContext || null,
+      entropy: entropyContext || null,
+      preterite: preteriteContext || null,
+      zoneResistance: zoneContext || null
     };
 
-    // Calculate token usage
+    // Calculate token usage for non-memory components
     let totalTokens = 0;
     totalTokens += estimateTokens(components.relationship);
     totalTokens += estimateTokens(components.personaRelations);
     totalTokens += estimateTokens(components.personaMemories);
     totalTokens += estimateTokens(components.setting);
     totalTokens += estimateTokens(components.driftCorrection);
+    totalTokens += estimateTokens(components.temporal);
+    totalTokens += estimateTokens(components.ambient);
+    totalTokens += estimateTokens(components.entropy);
+    totalTokens += estimateTokens(components.preterite);
+    totalTokens += estimateTokens(components.zoneResistance);
 
     // Check if we need to truncate memories
     const remainingBudget = maxTokens - totalTokens - CONTEXT_BUDGET.buffer;
@@ -499,21 +830,36 @@ export async function assembleContext(params) {
     }
 
     // Assemble final system prompt
-    // Order: setting → user relationship → persona relationships → memories → persona memories → drift
+    // Order: setting → ambient → temporal → relationship → persona relationships →
+    //        memories → persona memories → preterite → entropy → drift → zone resistance
     const parts = [];
 
+    // Setting layer (atmosphere foundation)
     if (components.setting) {
       parts.push(components.setting);
     }
 
+    // Ambient layer (sensory details)
+    if (components.ambient) {
+      parts.push('\n' + components.ambient);
+    }
+
+    // Temporal layer (time awareness)
+    if (components.temporal) {
+      parts.push('\n' + components.temporal);
+    }
+
+    // Relationship layer (user context)
     if (components.relationship) {
       parts.push('\n' + components.relationship);
     }
 
+    // Persona relations layer
     if (components.personaRelations) {
       parts.push('\n' + components.personaRelations);
     }
 
+    // Memory layers (elect memories)
     if (components.memories) {
       parts.push('\n' + components.memories);
     }
@@ -522,14 +868,30 @@ export async function assembleContext(params) {
       parts.push('\n' + components.personaMemories);
     }
 
+    // Preterite layer (surfacing forgotten)
+    if (components.preterite) {
+      parts.push('\n' + components.preterite);
+    }
+
+    // Entropy layer (decay effects)
+    if (components.entropy) {
+      parts.push('\n' + components.entropy);
+    }
+
+    // Drift correction layer
     if (components.driftCorrection) {
       parts.push('\n' + components.driftCorrection);
+    }
+
+    // Zone resistance layer (meta-deflection, highest priority)
+    if (components.zoneResistance) {
+      parts.push('\n' + components.zoneResistance);
     }
 
     const systemPrompt = parts.join('').trim();
     totalTokens = estimateTokens(systemPrompt);
 
-    // Step 7: Log context assembly
+    // Step 10: Log context assembly
     await logOperation('context_assembly', {
       sessionId,
       personaId,
@@ -537,7 +899,11 @@ export async function assembleContext(params) {
       details: {
         total_tokens: totalTokens,
         components_included: Object.keys(components).filter(k => components[k]),
-        budget_remaining: maxTokens - totalTokens
+        budget_remaining: maxTokens - totalTokens,
+        pynchon_enabled: includePynchon,
+        has_temporal: !!temporalContext,
+        has_preterite: !!preteriteContext,
+        has_zone_resistance: !!zoneContext
       },
       durationMs: Date.now() - startTime,
       success: true
@@ -554,7 +920,14 @@ export async function assembleContext(params) {
         memoriesIncluded: memoryObjects.length,
         driftScore,
         trustLevel: relationship.trust_level,
-        assemblyDurationMs: Date.now() - startTime
+        assemblyDurationMs: Date.now() - startTime,
+        // Phase 1 metadata
+        pynchonEnabled: includePynchon,
+        hasTemporalContext: !!temporalContext,
+        hasPreteriteContext: !!preteriteContext,
+        hasZoneResistance: !!zoneContext,
+        hasAmbientContext: !!ambientContext,
+        hasEntropyContext: !!entropyContext
       }
     };
 
@@ -579,8 +952,15 @@ export async function assembleContext(params) {
       components: {
         memories: null,
         relationship: null,
+        personaRelations: null,
+        personaMemories: null,
         driftCorrection: null,
-        setting: 'It is 2 AM at O Fim. The humidity is eternal. Chopp flows cold.'
+        setting: 'It is 2 AM at O Fim. The humidity is eternal. Chopp flows cold.',
+        temporal: null,
+        ambient: null,
+        entropy: null,
+        preterite: null,
+        zoneResistance: null
       },
       metadata: {
         sessionId,
@@ -589,7 +969,13 @@ export async function assembleContext(params) {
         memoriesIncluded: 0,
         driftScore: null,
         trustLevel: 'stranger',
-        assemblyDurationMs: Date.now() - startTime
+        assemblyDurationMs: Date.now() - startTime,
+        pynchonEnabled: false,
+        hasTemporalContext: false,
+        hasPreteriteContext: false,
+        hasZoneResistance: false,
+        hasAmbientContext: false,
+        hasEntropyContext: false
       }
     };
   }
@@ -598,6 +984,11 @@ export async function assembleContext(params) {
 /**
  * Complete a session by updating relationship and extracting memories.
  * Called at session end to track familiarity progression and store memorable content.
+ *
+ * Phase 1 Pynchon Stack Integration:
+ * - Updates persona temporal state (last active)
+ * - Increments global entropy
+ * - Classifies new memories for preterite/elect status
  *
  * @param {Object} sessionData - Session completion data
  * @param {string} sessionData.sessionId - Session UUID
@@ -668,9 +1059,26 @@ export async function completeSession(sessionData) {
     });
 
     let memoriesStored = 0;
+    let memoriesConsignedToPreterite = 0;
+
     if (memories.length > 0) {
       await storeSessionMemories(userId, personaId, memories);
       memoriesStored = memories.length;
+
+      // Phase 1 Pynchon: Classify memories for preterite/elect status
+      // Some memories are deemed insignificant and consigned to the preterite
+      try {
+        for (const memory of memories) {
+          const classification = classifyMemoryElection(memory);
+          if (classification.status === 'preterite') {
+            await consignToPreterite(memory, classification.reason);
+            memoriesConsignedToPreterite++;
+          }
+        }
+      } catch (preteriteError) {
+        // Silent fallback - preterite classification is not critical
+        console.error('[ContextAssembler] Preterite classification failed:', preteriteError.message);
+      }
     }
 
     // Extract and save setting preferences (005-setting-preservation)
@@ -684,6 +1092,27 @@ export async function completeSession(sessionData) {
       endedAt
     });
 
+    // Phase 1: Update temporal state (Constitution Principle VII)
+    try {
+      await touchTemporalState(personaId, {
+        sessionDuration: endedAt - startedAt,
+        messageCount: messages.length
+      });
+    } catch (temporalError) {
+      // Silent fallback - temporal tracking is not critical
+      console.error('[ContextAssembler] Temporal state update failed:', temporalError.message);
+    }
+
+    // Phase 1 Pynchon: Increment global entropy
+    // Each session adds to the entropy of the system
+    let entropyResult = null;
+    try {
+      entropyResult = await applySessionEntropy(sessionId);
+    } catch (entropyError) {
+      // Silent fallback - entropy tracking is not critical
+      console.error('[ContextAssembler] Entropy increment failed:', entropyError.message);
+    }
+
     await logOperation('session_complete', {
       sessionId,
       personaId,
@@ -694,8 +1123,11 @@ export async function completeSession(sessionData) {
         familiarity_delta: relationshipResult.effectiveDelta,
         trust_level_changed: relationshipResult.trustLevelChanged,
         memories_stored: memoriesStored,
+        memories_preterite: memoriesConsignedToPreterite,
         settings_extracted: settingResult.fieldsUpdated.length > 0,
-        settings_fields: settingResult.fieldsUpdated
+        settings_fields: settingResult.fieldsUpdated,
+        entropy_level: entropyResult?.level || null,
+        entropy_state: entropyResult?.state || null
       },
       durationMs: Date.now() - startTime,
       success: true
@@ -704,8 +1136,10 @@ export async function completeSession(sessionData) {
     return {
       relationship: relationshipResult,
       memoriesStored,
+      memoriesConsignedToPreterite,
       settingsExtracted: settingResult.fieldsUpdated,
-      sessionQuality
+      sessionQuality,
+      entropyState: entropyResult?.state || null
     };
 
   } catch (error) {
@@ -726,7 +1160,9 @@ export async function completeSession(sessionData) {
     return {
       relationship: null,
       memoriesStored: 0,
+      memoriesConsignedToPreterite: 0,
       sessionQuality: null,
+      entropyState: null,
       error: error.message
     };
   }
@@ -814,9 +1250,15 @@ function calculateTopicDepth(messages) {
  * Assemble context for multi-persona council sessions.
  * Each persona receives awareness of their relationships with other participants.
  *
+ * Phase 1 Pynchon Stack Integration:
+ * - Ambient atmosphere (shared by all participants)
+ * - Entropy effects (shared decay state)
+ * - Zone boundary detection (resists meta-awareness probing)
+ *
  * @param {Object} params - Council assembly parameters
  * @param {string} params.personaId - UUID of the persona being assembled for
  * @param {string} params.personaName - Name of the persona
+ * @param {string} params.personaSlug - Slug of the persona (for temporal)
  * @param {string} params.userId - UUID of the user (optional for councils)
  * @param {string[]} params.participantIds - UUIDs of all council participants
  * @param {string[]} params.participantNames - Names of all council participants
@@ -824,12 +1266,15 @@ function calculateTopicDepth(messages) {
  * @param {string} params.topic - Council topic/question
  * @param {string} params.councilType - Type: 'council', 'dialectic', 'familia', etc.
  * @param {Object} [params.councilState] - Current council state machine position
+ * @param {Object} [params.options] - Optional configuration
+ * @param {boolean} [params.options.includePynchon=true] - Include Pynchon Stack layers
  * @returns {Promise<Object>} Council context for this persona
  *
  * @example
  * const context = await assembleCouncilContext({
  *   personaId: 'hegel-uuid',
  *   personaName: 'Hegel',
+ *   personaSlug: 'hegel',
  *   userId: 'user-456',
  *   participantIds: ['socrates-uuid', 'diogenes-uuid'],
  *   participantNames: ['Socrates', 'Diogenes'],
@@ -843,14 +1288,18 @@ export async function assembleCouncilContext(params) {
   const {
     personaId,
     personaName,
+    personaSlug = null,
     userId,
     participantIds,
     participantNames,
     sessionId,
     topic,
     councilType,
-    councilState = null
+    councilState = null,
+    options = {}
   } = params;
+
+  const includePynchon = options.includePynchon !== false;
 
   try {
     // Step 1: Get persona's relationships with other council participants
@@ -869,18 +1318,43 @@ export async function assembleCouncilContext(params) {
     const otherParticipants = participantNames.filter(n => n !== personaName);
     const councilFrame = buildCouncilFrame(councilType, topic, otherParticipants, councilState);
 
-    // Step 5: Assemble components
+    // Step 5: Fetch Phase 1 Pynchon Stack components (shared atmosphere)
+    let ambientContext = null;
+    let entropyContext = null;
+    let zoneContext = null;
+
+    if (includePynchon) {
+      // Ambient details (shared bar atmosphere for all council members)
+      ambientContext = await safeAmbientFetch(sessionId, personaId);
+
+      // Entropy effects (shared decay state)
+      entropyContext = await safeEntropyFetch(sessionId);
+
+      // Zone boundary detection (resistance to meta-awareness)
+      zoneContext = await safeZoneDetection(topic, sessionId, personaId);
+    }
+
+    // Step 6: Assemble components
     const components = {
       councilFrame,
       personaRelations: personaRelations || null,
       personaMemories: personaMemories || null,
-      userRelationship: userRelationship ? `The one who called this council: ${userRelationship.trust_level}.` : null
+      userRelationship: userRelationship ? `The one who called this council: ${userRelationship.trust_level}.` : null,
+      // Pynchon Stack Phase 1
+      ambient: ambientContext || null,
+      entropy: entropyContext || null,
+      zoneResistance: zoneContext || null
     };
 
-    // Step 6: Build system prompt
+    // Step 7: Build system prompt
     const parts = [];
 
     parts.push(councilFrame);
+
+    // Ambient layer (shared atmosphere)
+    if (components.ambient) {
+      parts.push('\n' + components.ambient);
+    }
 
     if (components.personaRelations) {
       parts.push('\n' + components.personaRelations);
@@ -892,6 +1366,16 @@ export async function assembleCouncilContext(params) {
 
     if (components.userRelationship) {
       parts.push('\n' + components.userRelationship);
+    }
+
+    // Entropy layer (decay effects)
+    if (components.entropy) {
+      parts.push('\n' + components.entropy);
+    }
+
+    // Zone resistance layer (meta-deflection)
+    if (components.zoneResistance) {
+      parts.push('\n' + components.zoneResistance);
     }
 
     const systemPrompt = parts.join('').trim();
@@ -906,6 +1390,10 @@ export async function assembleCouncilContext(params) {
         has_persona_relations: !!personaRelations,
         has_persona_memories: !!personaMemories,
         has_user_relationship: !!userRelationship,
+        pynchon_enabled: includePynchon,
+        has_ambient: !!ambientContext,
+        has_entropy: !!entropyContext,
+        has_zone_resistance: !!zoneContext,
         total_tokens: totalTokens
       },
       durationMs: Date.now() - startTime,
@@ -922,7 +1410,11 @@ export async function assembleCouncilContext(params) {
         councilType,
         participantCount: participantIds.length,
         totalTokens,
-        assemblyDurationMs: Date.now() - startTime
+        assemblyDurationMs: Date.now() - startTime,
+        pynchonEnabled: includePynchon,
+        hasAmbientContext: !!ambientContext,
+        hasEntropyContext: !!entropyContext,
+        hasZoneResistance: !!zoneContext
       }
     };
 
@@ -953,7 +1445,8 @@ export async function assembleCouncilContext(params) {
         participantCount: participantIds.length,
         totalTokens: estimateTokens(fallbackFrame),
         assemblyDurationMs: Date.now() - startTime,
-        fallback: true
+        fallback: true,
+        pynchonEnabled: false
       }
     };
   }
