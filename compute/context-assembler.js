@@ -26,9 +26,14 @@ import { generateTemporalContext, frameTemporalContext, touchTemporalState } fro
 // Ambient atmosphere and entropy (Phase 1 Pynchon Stack)
 import { generateAmbientDetails, frameAmbientContext } from './ambient-generator.js';
 import { getEntropyState, applySessionEntropy, frameEntropyContext } from './entropy-tracker.js';
-// Pynchon Layer: Preterite memory and Zone boundaries
+// Pynchon Layer Phase 1: Preterite memory and Zone boundaries
 import { attemptSurface, classifyMemoryElection, consignToPreterite, framePreteriteContext } from './preterite-memory.js';
 import { detectZoneApproach, frameZoneContext } from './zone-boundary-detector.js';
+// Pynchon Layer Phase 2: Paranoia, Counterforce, Narrative Gravity, Interface Bleed
+import { processTheyAwareness, frameTheyContext } from './they-awareness.js';
+import { getPersonaAlignment, generateCounterforceHints, frameCounterforceContext } from './counterforce-tracker.js';
+import { getSessionArc, updateArc, analyzeMomentum, getPhaseEffects, generateArcContext, frameArcContext } from './narrative-gravity.js';
+import { processInterfaceBleed, frameBleedContext } from './interface-bleed.js';
 const { Pool } = pg;
 
 let pool = null;
@@ -58,23 +63,27 @@ function getPool() {
 
 /**
  * Token budget allocation for context components.
- * Updated for Constitution Principle VI (Persona Autonomy) and VII (Temporal Consciousness).
- * Also includes Pynchon Stack Phase 1 components.
+ * Updated for Constitution Principles VI-VII and Pynchon Stack Phases 1-2.
  */
 const CONTEXT_BUDGET = {
   soulMarkers: 500,        // Highest priority - persona voice markers
-  relationship: 250,       // Behavioral hints (user relationship)
-  personaRelations: 150,   // Persona-to-persona relationships (Principle VI)
-  setting: 150,            // Bar atmosphere (reduced, supplemented by ambient)
-  driftCorrection: 150,    // Voice corrections
-  memories: 1000,          // Framed memories (reduced to make room for Pynchon)
-  personaMemories: 150,    // Persona's independent knowledge (Principle VI)
+  relationship: 200,       // Behavioral hints (user relationship)
+  personaRelations: 100,   // Persona-to-persona relationships (Principle VI)
+  setting: 100,            // Bar atmosphere (supplemented by ambient)
+  driftCorrection: 100,    // Voice corrections
+  memories: 800,           // Framed memories (reduced for Pynchon layers)
+  personaMemories: 100,    // Persona's independent knowledge (Principle VI)
   // Phase 1 Pynchon Stack + Temporal Consciousness
-  temporal: 150,           // Time gaps, reflections (Principle VII)
-  ambient: 200,            // Music, weather, micro-events
-  entropy: 100,            // Decay effects, static
-  preterite: 150,          // Surfacing forgotten memories (Pynchon)
-  zoneResistance: 100,     // Boundary push-back (Pynchon)
+  temporal: 100,           // Time gaps, reflections (Principle VII)
+  ambient: 150,            // Music, weather, micro-events
+  entropy: 75,             // Decay effects, static
+  preterite: 100,          // Surfacing forgotten memories (Pynchon)
+  zoneResistance: 75,      // Boundary push-back (Pynchon)
+  // Phase 2 Pynchon Stack
+  theyAwareness: 100,      // Paranoid undertones (Pynchon)
+  counterforce: 75,        // Resistance alignment (Pynchon)
+  narrativeGravity: 75,    // Arc trajectory effects (Pynchon)
+  interfaceBleed: 100,     // System artifact leaks (Pynchon)
   buffer: 150              // Safety margin
 };
 
@@ -630,6 +639,216 @@ async function safeZoneDetection(query, sessionId, personaId) {
   }
 }
 
+// ============================================================================
+// PHASE 2 PYNCHON STACK SAFE FETCH FUNCTIONS
+// ============================================================================
+
+/**
+ * Safely process "They" awareness patterns and generate paranoid undertones.
+ * Pynchon's "They" - the unseen forces that watch, control, and elect/preterite.
+ *
+ * @param {string} query - User's current query
+ * @param {string} sessionId - Session UUID
+ * @param {string} personaId - Persona UUID
+ * @returns {Promise<string|null>} Framed "They" awareness context or null
+ */
+async function safeTheyAwarenessFetch(query, sessionId, personaId) {
+  const startTime = Date.now();
+
+  try {
+    const theyResult = await processTheyAwareness(query, sessionId, personaId);
+
+    if (!theyResult || theyResult.level === 'OBLIVIOUS') {
+      return null;
+    }
+
+    const framed = frameTheyContext(theyResult);
+
+    await logOperation('they_awareness_detected', {
+      sessionId,
+      personaId,
+      details: {
+        level: theyResult.level,
+        score: theyResult.score,
+        patterns_detected: theyResult.patterns?.length || 0
+      },
+      durationMs: Date.now() - startTime,
+      success: true
+    });
+
+    return framed || null;
+  } catch (error) {
+    await logOperation('error_graceful', {
+      sessionId,
+      personaId,
+      details: {
+        error_type: 'they_awareness_failure',
+        error_message: error.message,
+        fallback_used: 'null'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    return null;
+  }
+}
+
+/**
+ * Safely fetch Counterforce alignment and generate resistance hints.
+ * Some personas resist the system; others collaborate.
+ *
+ * @param {string} personaId - Persona UUID
+ * @param {string} sessionId - Session UUID
+ * @returns {Promise<string|null>} Framed Counterforce context or null
+ */
+async function safeCounterforceFetch(personaId, sessionId) {
+  const startTime = Date.now();
+
+  try {
+    const alignment = await getPersonaAlignment(personaId);
+
+    if (!alignment || alignment.type === 'NEUTRAL') {
+      return null;
+    }
+
+    const hints = await generateCounterforceHints(personaId, alignment);
+    const framed = frameCounterforceContext(alignment, hints);
+
+    await logOperation('counterforce_alignment', {
+      sessionId,
+      personaId,
+      details: {
+        type: alignment.type,
+        score: alignment.score,
+        style: alignment.style
+      },
+      durationMs: Date.now() - startTime,
+      success: true
+    });
+
+    return framed || null;
+  } catch (error) {
+    await logOperation('error_graceful', {
+      sessionId,
+      personaId,
+      details: {
+        error_type: 'counterforce_fetch_failure',
+        error_message: error.message,
+        fallback_used: 'null'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    return null;
+  }
+}
+
+/**
+ * Safely fetch narrative gravity arc and generate phase effects.
+ * Conversations follow the rocket's parabola: rising, apex, falling, impact.
+ *
+ * @param {string} sessionId - Session UUID
+ * @param {number} exchangeCount - Number of exchanges in session
+ * @returns {Promise<string|null>} Framed arc context or null
+ */
+async function safeNarrativeGravityFetch(sessionId, exchangeCount = 1) {
+  const startTime = Date.now();
+
+  try {
+    const arc = await getSessionArc(sessionId);
+    const momentum = await analyzeMomentum(sessionId, exchangeCount);
+    const effects = await getPhaseEffects(arc?.phase || 'RISING');
+
+    if (!arc && !effects) {
+      return null;
+    }
+
+    const context = await generateArcContext(sessionId, arc, momentum, effects);
+    const framed = frameArcContext(context);
+
+    await logOperation('narrative_arc_fetch', {
+      sessionId,
+      details: {
+        phase: arc?.phase || 'RISING',
+        momentum: momentum?.trend || 'neutral',
+        effects_count: effects?.length || 0
+      },
+      durationMs: Date.now() - startTime,
+      success: true
+    });
+
+    return framed || null;
+  } catch (error) {
+    await logOperation('error_graceful', {
+      sessionId,
+      details: {
+        error_type: 'narrative_gravity_failure',
+        error_message: error.message,
+        fallback_used: 'null'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    return null;
+  }
+}
+
+/**
+ * Safely process interface bleed effects at high entropy.
+ * System artifacts leak through when reality breaks down.
+ *
+ * @param {string} sessionId - Session UUID
+ * @param {number} entropyLevel - Current entropy level (0-1)
+ * @returns {Promise<string|null>} Framed bleed context or null
+ */
+async function safeInterfaceBleedFetch(sessionId, entropyLevel = 0) {
+  const startTime = Date.now();
+
+  try {
+    // Only process bleeds at elevated entropy
+    if (entropyLevel < 0.5) {
+      return null;
+    }
+
+    const bleedResult = await processInterfaceBleed(sessionId, entropyLevel);
+
+    if (!bleedResult || !bleedResult.shouldBleed) {
+      return null;
+    }
+
+    const framed = frameBleedContext(bleedResult);
+
+    await logOperation('interface_bleed', {
+      sessionId,
+      details: {
+        entropy_level: entropyLevel,
+        bleed_type: bleedResult.type,
+        severity: bleedResult.severity
+      },
+      durationMs: Date.now() - startTime,
+      success: true
+    });
+
+    return framed || null;
+  } catch (error) {
+    await logOperation('error_graceful', {
+      sessionId,
+      details: {
+        error_type: 'interface_bleed_failure',
+        error_message: error.message,
+        fallback_used: 'null'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    return null;
+  }
+}
+
 /**
  * Get setting context from database or use default.
  *
@@ -773,6 +992,35 @@ export async function assembleContext(params) {
       zoneContext = await safeZoneDetection(query, sessionId, personaId);
     }
 
+    // Step 8b: Fetch Pynchon Stack Phase 2 components (if enabled)
+    let theyContext = null;
+    let counterforceContext = null;
+    let narrativeContext = null;
+    let bleedContext = null;
+    let currentEntropyLevel = 0;
+
+    if (includePynchon) {
+      // Get current entropy level for interface bleed calculation
+      try {
+        const entropyState = await getEntropyState(sessionId);
+        currentEntropyLevel = entropyState?.level || 0;
+      } catch {
+        currentEntropyLevel = 0;
+      }
+
+      // "They" awareness - paranoid undertones when users probe the system
+      theyContext = await safeTheyAwarenessFetch(query, sessionId, personaId);
+
+      // Counterforce alignment - resistance vs collaboration tendencies
+      counterforceContext = await safeCounterforceFetch(personaId, sessionId);
+
+      // Narrative gravity - rocket's parabola arc effects
+      narrativeContext = await safeNarrativeGravityFetch(sessionId, options.exchangeCount || 1);
+
+      // Interface bleed - system artifacts leak at high entropy
+      bleedContext = await safeInterfaceBleedFetch(sessionId, currentEntropyLevel);
+    }
+
     // Step 9: Assemble within token budget
     const components = {
       // Core components
@@ -788,7 +1036,12 @@ export async function assembleContext(params) {
       ambient: ambientContext || null,
       entropy: entropyContext || null,
       preterite: preteriteContext || null,
-      zoneResistance: zoneContext || null
+      zoneResistance: zoneContext || null,
+      // Pynchon Stack Phase 2
+      theyAwareness: theyContext || null,
+      counterforce: counterforceContext || null,
+      narrativeGravity: narrativeContext || null,
+      interfaceBleed: bleedContext || null
     };
 
     // Calculate token usage for non-memory components
@@ -803,6 +1056,11 @@ export async function assembleContext(params) {
     totalTokens += estimateTokens(components.entropy);
     totalTokens += estimateTokens(components.preterite);
     totalTokens += estimateTokens(components.zoneResistance);
+    // Phase 2 tokens
+    totalTokens += estimateTokens(components.theyAwareness);
+    totalTokens += estimateTokens(components.counterforce);
+    totalTokens += estimateTokens(components.narrativeGravity);
+    totalTokens += estimateTokens(components.interfaceBleed);
 
     // Check if we need to truncate memories
     const remainingBudget = maxTokens - totalTokens - CONTEXT_BUDGET.buffer;
@@ -883,9 +1141,29 @@ export async function assembleContext(params) {
       parts.push('\n' + components.driftCorrection);
     }
 
-    // Zone resistance layer (meta-deflection, highest priority)
+    // Zone resistance layer (meta-deflection)
     if (components.zoneResistance) {
       parts.push('\n' + components.zoneResistance);
+    }
+
+    // Phase 2: "They" awareness layer (paranoid undertones)
+    if (components.theyAwareness) {
+      parts.push('\n' + components.theyAwareness);
+    }
+
+    // Phase 2: Counterforce layer (resistance/collaboration tendency)
+    if (components.counterforce) {
+      parts.push('\n' + components.counterforce);
+    }
+
+    // Phase 2: Narrative gravity layer (arc phase effects)
+    if (components.narrativeGravity) {
+      parts.push('\n' + components.narrativeGravity);
+    }
+
+    // Phase 2: Interface bleed layer (system artifacts, highest priority for immersion-breaking)
+    if (components.interfaceBleed) {
+      parts.push('\n' + components.interfaceBleed);
     }
 
     const systemPrompt = parts.join('').trim();
@@ -903,7 +1181,12 @@ export async function assembleContext(params) {
         pynchon_enabled: includePynchon,
         has_temporal: !!temporalContext,
         has_preterite: !!preteriteContext,
-        has_zone_resistance: !!zoneContext
+        has_zone_resistance: !!zoneContext,
+        // Phase 2 indicators
+        has_they_awareness: !!theyContext,
+        has_counterforce: !!counterforceContext,
+        has_narrative_gravity: !!narrativeContext,
+        has_interface_bleed: !!bleedContext
       },
       durationMs: Date.now() - startTime,
       success: true
@@ -927,7 +1210,13 @@ export async function assembleContext(params) {
         hasPreteriteContext: !!preteriteContext,
         hasZoneResistance: !!zoneContext,
         hasAmbientContext: !!ambientContext,
-        hasEntropyContext: !!entropyContext
+        hasEntropyContext: !!entropyContext,
+        // Phase 2 metadata
+        hasTheyAwareness: !!theyContext,
+        hasCounterforce: !!counterforceContext,
+        hasNarrativeGravity: !!narrativeContext,
+        hasInterfaceBleed: !!bleedContext,
+        entropyLevel: currentEntropyLevel
       }
     };
 
@@ -960,7 +1249,12 @@ export async function assembleContext(params) {
         ambient: null,
         entropy: null,
         preterite: null,
-        zoneResistance: null
+        zoneResistance: null,
+        // Phase 2 fallbacks
+        theyAwareness: null,
+        counterforce: null,
+        narrativeGravity: null,
+        interfaceBleed: null
       },
       metadata: {
         sessionId,
@@ -973,6 +1267,12 @@ export async function assembleContext(params) {
         pynchonEnabled: false,
         hasTemporalContext: false,
         hasPreteriteContext: false,
+        // Phase 2 fallbacks
+        hasTheyAwareness: false,
+        hasCounterforce: false,
+        hasNarrativeGravity: false,
+        hasInterfaceBleed: false,
+        entropyLevel: 0,
         hasZoneResistance: false,
         hasAmbientContext: false,
         hasEntropyContext: false
@@ -1113,6 +1413,20 @@ export async function completeSession(sessionData) {
       console.error('[ContextAssembler] Entropy increment failed:', entropyError.message);
     }
 
+    // Phase 2 Pynchon: Update narrative arc to IMPACT at session end
+    // The rocket's parabola completes its descent
+    let arcResult = null;
+    try {
+      arcResult = await updateArc(sessionId, 'IMPACT', {
+        messageCount: messages.length,
+        durationMs: endedAt - startedAt,
+        entropyLevel: entropyResult?.level || 0
+      });
+    } catch (arcError) {
+      // Silent fallback - narrative arc tracking is not critical
+      console.error('[ContextAssembler] Narrative arc update failed:', arcError.message);
+    }
+
     await logOperation('session_complete', {
       sessionId,
       personaId,
@@ -1127,7 +1441,9 @@ export async function completeSession(sessionData) {
         settings_extracted: settingResult.fieldsUpdated.length > 0,
         settings_fields: settingResult.fieldsUpdated,
         entropy_level: entropyResult?.level || null,
-        entropy_state: entropyResult?.state || null
+        entropy_state: entropyResult?.state || null,
+        // Phase 2
+        arc_phase: arcResult?.phase || 'IMPACT'
       },
       durationMs: Date.now() - startTime,
       success: true
@@ -1139,7 +1455,9 @@ export async function completeSession(sessionData) {
       memoriesConsignedToPreterite,
       settingsExtracted: settingResult.fieldsUpdated,
       sessionQuality,
-      entropyState: entropyResult?.state || null
+      entropyState: entropyResult?.state || null,
+      // Phase 2
+      arcPhase: arcResult?.phase || 'IMPACT'
     };
 
   } catch (error) {
@@ -1163,6 +1481,7 @@ export async function completeSession(sessionData) {
       memoriesConsignedToPreterite: 0,
       sessionQuality: null,
       entropyState: null,
+      arcPhase: null,
       error: error.message
     };
   }
