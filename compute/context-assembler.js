@@ -802,7 +802,7 @@ async function safeInterfaceBleedFetch(sessionId, entropyLevel = 0) {
 
     const bleedResult = await processInterfaceBleed(sessionId, entropyLevel);
 
-    if (!bleedResult || !bleedResult.shouldBleed) {
+    if (!bleedResult || !bleedResult.bleeds || bleedResult.bleeds.length === 0) {
       return null;
     }
 
@@ -849,7 +849,6 @@ async function getSettingContext(sessionId) {
     const result = await db.query(
       `SELECT template FROM context_templates
        WHERE template_type = 'setting'
-         AND active = true
        ORDER BY priority DESC
        LIMIT 1`
     );
@@ -1400,15 +1399,11 @@ export async function completeSession(sessionData) {
       console.error('[ContextAssembler] Entropy increment failed:', entropyError.message);
     }
 
-    // Phase 2 Pynchon: Update narrative arc to IMPACT at session end
-    // The rocket's parabola completes its descent
+    // Phase 2 Pynchon: Update narrative arc at session end
+    // Large negative delta drives momentum below IMPACT_BELOW threshold (0.2)
     let arcResult = null;
     try {
-      arcResult = await updateArc(sessionId, 'IMPACT', {
-        messageCount: messages.length,
-        durationMs: endedAt - startedAt,
-        entropyLevel: entropyResult?.level || 0
-      });
+      arcResult = await updateArc(sessionId, -1.0);
     } catch (arcError) {
       // Silent fallback - narrative arc tracking is not critical
       console.error('[ContextAssembler] Narrative arc update failed:', arcError.message);

@@ -25,8 +25,12 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS operator_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID,
+    persona_id UUID REFERENCES personas(id) ON DELETE SET NULL,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     operation VARCHAR(100) NOT NULL,
     details JSONB DEFAULT '{}',
+    duration_ms INTEGER,
     success BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -35,8 +39,16 @@ COMMENT ON TABLE operator_logs IS
     'Silent operator logging. Never exposed to users or personas (Principle II).';
 COMMENT ON COLUMN operator_logs.operation IS
     'Operation name (e.g., settings_purge, awareness_increment, drift_correction)';
+COMMENT ON COLUMN operator_logs.session_id IS
+    'Session UUID for idempotency checks and correlation';
+COMMENT ON COLUMN operator_logs.persona_id IS
+    'Persona involved in the operation';
+COMMENT ON COLUMN operator_logs.user_id IS
+    'User involved in the operation';
 COMMENT ON COLUMN operator_logs.details IS
     'Structured details of the operation as JSONB';
+COMMENT ON COLUMN operator_logs.duration_ms IS
+    'Operation duration in milliseconds';
 COMMENT ON COLUMN operator_logs.success IS
     'Whether the operation completed successfully';
 
@@ -44,6 +56,8 @@ CREATE INDEX IF NOT EXISTS idx_operator_logs_operation
     ON operator_logs(operation);
 CREATE INDEX IF NOT EXISTS idx_operator_logs_created
     ON operator_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_operator_logs_session
+    ON operator_logs(session_id);
 
 -- =============================================================================
 -- 2. CONTEXT TEMPLATES TABLE (was migration 003)
@@ -178,17 +192,22 @@ CREATE INDEX IF NOT EXISTS idx_drift_alerts_severity
 -- =============================================================================
 
 -- log_operation: Convenience function for silent operator logging
+-- Accepts 7 args matching operator-logger.js: session_id, persona_id, user_id, operation, details, duration_ms, success
 CREATE OR REPLACE FUNCTION log_operation(
+    p_session_id UUID,
+    p_persona_id UUID,
+    p_user_id UUID,
     p_operation VARCHAR,
     p_details JSONB DEFAULT '{}',
+    p_duration_ms INTEGER DEFAULT NULL,
     p_success BOOLEAN DEFAULT true
 )
 RETURNS UUID AS $$
 DECLARE
     new_id UUID;
 BEGIN
-    INSERT INTO operator_logs (operation, details, success)
-    VALUES (p_operation, p_details, p_success)
+    INSERT INTO operator_logs (session_id, persona_id, user_id, operation, details, duration_ms, success)
+    VALUES (p_session_id, p_persona_id, p_user_id, p_operation, p_details, p_duration_ms, p_success)
     RETURNING id INTO new_id;
     RETURN new_id;
 END;
@@ -547,6 +566,12 @@ BEGIN
         SELECT COUNT(*) FROM information_schema.columns
         WHERE table_name = 'drift_alerts' AND column_name = 'warnings'
     ) = 1, 'warnings column not added to drift_alerts';
+
+    -- Verify operator_logs.session_id column
+    ASSERT (
+        SELECT COUNT(*) FROM information_schema.columns
+        WHERE table_name = 'operator_logs' AND column_name = 'session_id'
+    ) = 1, 'session_id column not added to operator_logs';
 
     RAISE NOTICE 'Migration 002_recovery completed successfully — all missing schema elements restored';
 END $$;

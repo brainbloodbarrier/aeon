@@ -186,23 +186,27 @@ Key compute modules:
 
 **V — Setting Preservation:** `setting-preserver.js` + `setting-extractor.js` maintain personalized atmosphere per user/persona pair. Settings expire after 90 days of inactivity.
 
-### Pynchon Stack (Phase 2)
+### Pynchon Stack
 
 Additional compute modules implementing paranoid realism:
-- `they-awareness.js` — Systemic surveillance patterns
-- `counterforce-tracker.js` — Resistance and counter-narrative
-- `narrative-gravity.js` — Story momentum and inevitability
-- `interface-bleed.js` — Reality/fiction boundary erosion
+
+**Phase 1** (Temporal Consciousness):
 - `temporal-awareness.js` — Non-linear time perception
 - `entropy-tracker.js` + `ambient-generator.js` — System entropy and atmosphere
 - `zone-boundary-detector.js` — Boundary crossing detection
 - `preterite-memory.js` — Forgotten/overlooked history retrieval
 
+**Phase 2** (They Awareness):
+- `they-awareness.js` — Systemic surveillance patterns
+- `counterforce-tracker.js` — Resistance and counter-narrative
+- `narrative-gravity.js` — Story momentum and inevitability
+- `interface-bleed.js` — Reality/fiction boundary erosion
+
 ### Database Schema
 
 Core tables: `personas`, `users`, `conversations`, `interactions`, `relationships`, `memories`, `operator_logs`, `context_templates`, `user_settings`.
 
-Migrations in `db/migrations/` (numbered 006–010). Init schema in `db/init/001_schema.sql`.
+Migrations in `db/migrations/` (002, 006, 008–010). Init schema in `db/init/001_schema.sql`.
 
 ### MCP Integration
 
@@ -212,14 +216,14 @@ MCP servers run outside Docker, configured in Claude Desktop (`~/Library/Applica
 
 ### Testing
 
-Uses Jest 29 with `--experimental-vm-modules` (ES Modules project). Unit tests mock the `pg` database pool. Integration tests in `tests/integration/` require a live database.
+Uses Jest 29 with `--experimental-vm-modules` (ES Modules project). Unit tests mock `db-pool.js` (shared pool). Integration tests in `tests/integration/` require a live database.
 
 **ESM mocking pattern** (gotcha — standard `jest.mock` doesn't work with ES Modules):
 ```javascript
 import { jest } from '@jest/globals';
 const mockQuery = jest.fn();
-jest.unstable_mockModule('pg', () => ({
-  default: { Pool: jest.fn(() => ({ query: mockQuery, end: jest.fn() })) }
+jest.unstable_mockModule('../../compute/db-pool.js', () => ({
+  getSharedPool: jest.fn(() => ({ query: mockQuery, end: jest.fn() }))
 }));
 // Import module AFTER mock setup
 const { myFunction } = await import('../../compute/my-module.js');

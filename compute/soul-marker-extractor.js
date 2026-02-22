@@ -292,7 +292,7 @@ export async function loadPersonaMarkers(personaName) {
     const content = await readFile(filePath, 'utf8');
 
     // Extract sections
-    const systemSection = extractSection(content, /^##\s+(Sistema|Sistema|System)\b/mi);
+    const systemSection = extractSection(content, /^##\s+(Sistema|System)\b/mi);
     const methodSection = extractSection(content, /^##\s+(Método|Method|Filosofia|Natureza)\b/mi);
     const voiceSection = extractSection(content, /^##\s+(Voz|Voice)\b/mi);
     const barSection = extractSection(content, /^##\s+(Tom no Bar|Bar)\b/mi);

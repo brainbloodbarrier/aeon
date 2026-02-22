@@ -779,11 +779,6 @@ export async function getTheyObservations(limit = 50) {
 
 /**
  * Close the database connection pool.
- *
- * @returns {Promise<void>}
- */
-/**
- * Close the database connection pool.
  * @deprecated Use closeSharedPool() from db-pool.js instead
  *
  * @returns {Promise<void>}
