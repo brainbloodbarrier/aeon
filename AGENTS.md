@@ -151,13 +151,57 @@ Available personas include Portuguese literary figures (pessoa, caeiro, reis, ca
 - Memory retrieval accuracy checks
 - Drift detection threshold monitoring
 
-## Security Considerations
+## Coding Rules
 
-- Database passwords stored in environment variables
-- Container isolation via Docker networks
-- SQL injection prevention through parameterized queries
-- Memory access controlled via MCP server permissions
-- Persona containment prevents unauthorized identity drift
+### Security
+
+**Validate persona names against directory traversal** (ERROR)
+Any function receiving a persona name to construct a file path must sanitize input. Strip or reject `..`, `/`, `\`, and null bytes. Validate the resolved path stays within PERSONAS_DIR using `path.resolve()` + `startsWith()`. Applies to `soul-marker-extractor.js`, `soul-validator.js`, and any module reading persona files by name.
+
+**Never expose operator_logs content to users** (ERROR)
+Constitution Principle II mandates invisible infrastructure. Any endpoint, response, or context injection that leaks data from `operator_logs` violates the architecture. Operator logs are exclusively for system diagnostics.
+
+**Do not hard-code database passwords; load from environment variables** (WARNING)
+All database credentials must come from `process.env` or a secret manager. Connection strings must not contain literal passwords. Config examples must use placeholders like `CHANGE_ME`.
+
+**Use parameterized SQL for all database operations** (WARNING)
+Every database call must use driver-appropriate placeholders (`$1`, `$2` for pg). Never use string interpolation, concatenation, or template literals to build SQL with variables. All external input is untrusted.
+
+### Correctness
+
+**Match SQL function signatures to JS callers** (ERROR)
+SQL functions (`log_operation`, `get_context_template`, etc.) must accept the exact number and types of parameters that the JS code passes. Mismatches cause silent runtime failures caught by catch blocks.
+
+**Check return shape before accessing properties** (ERROR)
+When a function returns an object, guard conditions must check properties that actually exist on the return value. Never check for nonexistent properties — `undefined` is falsy and silently disables code paths.
+
+**Use lowercase constants for ARC_PHASES** (WARNING)
+All phase values must use lowercase (`'rising'`, `'apex'`, `'falling'`, `'impact'`) matching the `ARC_PHASES` constants in `narrative-gravity.js`. Uppercase variants produce mismatches in comparisons and logs.
+
+**Order Jest ESM mocks before importing the module under test** (WARNING)
+All `jest.unstable_mockModule()` calls must appear before any `await import()` of the module under test. Static `import` statements bypass mocks entirely. The module under test must always be dynamically imported after mock setup.
+
+### Testability
+
+**Unit tests must mock shared DB pool module** (WARNING)
+All unit test files that import compute modules must mock `../../compute/db-pool.js` with `getSharedPool: jest.fn(() => mockPool)`. Never establish real database connections in unit tests.
+
+**Mock operator-logger.js in all compute unit tests** (WARNING)
+Any test file for a compute module that imports `operator-logger.js` must mock it to prevent transitive database access. Use `jest.unstable_mockModule('../../compute/operator-logger.js', () => ({ logOperation: jest.fn() }))`.
+
+**Never use bare return to skip tests; use test.skip** (WARNING)
+When tests need to be conditionally skipped (e.g., no database available), use `test.skip()` or `describe.skip()` instead of `if (!condition) return`. Bare returns produce phantom passes in CI output.
+
+### Architecture
+
+**All compute modules must use getSharedPool() from db-pool.js** (ERROR)
+No compute module may import `pg` directly or create its own Pool instance. All database access goes through `getSharedPool()` from `compute/db-pool.js`. This ensures centralized connection management and fatal error recovery.
+
+**Soul file modifications require hash regeneration** (ERROR)
+Any edit to files in `personas/**/*.md` must be followed by `node scripts/init-soul-hashes.js` and committing the updated `personas/.soul-hashes.json`. Stale hashes cause the soul validator to reject personas at runtime (Constitution Principle I).
+
+**Context assembly helpers must fail silently with null** (WARNING)
+All `safe*Fetch` functions in `context-assembler.js` must catch errors and return `null`. Exceptions must never propagate upward — a failing subsystem (entropy, bleed, narrative gravity) must not break context assembly for the user.
 
 ## Deployment Process
 
