@@ -12,10 +12,12 @@ const mockPool = {
   end: jest.fn()
 };
 
-jest.unstable_mockModule('pg', () => ({
-  default: {
-    Pool: jest.fn(() => mockPool)
-  }
+jest.unstable_mockModule('../../compute/db-pool.js', () => ({
+  getSharedPool: jest.fn(() => mockPool)
+}));
+
+jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
+  logOperation: jest.fn()
 }));
 
 // Import after mocking
@@ -109,17 +111,12 @@ describe('Zone Boundary Detector Module', () => {
 
     it('should return string response for medium proximity', () => {
       const resistance = selectZoneResistance(0.4);
-      // May or may not return based on threshold
-      if (resistance !== null) {
-        expect(typeof resistance).toBe('string');
-      }
+      expect(typeof resistance).toBe('string');
     });
 
     it('should return string response for high proximity', () => {
       const resistance = selectZoneResistance(0.7);
-      if (resistance !== null) {
-        expect(typeof resistance).toBe('string');
-      }
+      expect(typeof resistance).toBe('string');
     });
 
     it('should return string response for critical proximity', () => {

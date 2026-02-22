@@ -8,12 +8,8 @@
  * Constitution: Principle VI (Persona Autonomy)
  */
 
-import pg from 'pg';
-const { Pool } = pg;
-
+import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
-
-let pool = null;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Constants
@@ -51,30 +47,12 @@ export const MAX_MEMORIES_PER_QUERY = 10;
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Get or create database connection pool.
+ * Get database connection pool.
  *
  * @returns {Pool} PostgreSQL connection pool
  */
 function getPool() {
-  if (!pool) {
-    if (!process.env.DATABASE_URL) {
-      throw new Error('[PersonaMemory] DATABASE_URL environment variable is required');
-    }
-    const connectionString = process.env.DATABASE_URL;
-
-    pool = new Pool({
-      connectionString,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
-    });
-
-    pool.on('error', (err) => {
-      console.error('[PersonaMemory] Unexpected error on idle client', err);
-    });
-  }
-
-  return pool;
+  return getSharedPool();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

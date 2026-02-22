@@ -8,12 +8,8 @@
  * Constitution: Principle IV (Relationship Continuity)
  */
 
-import pg from 'pg';
-const { Pool } = pg;
-
+import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
-
-let pool = null;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Constants
@@ -44,30 +40,12 @@ export const IMPORTANCE_WEIGHTS = {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Get or create database connection pool.
+ * Get database connection pool.
  *
  * @returns {Pool} PostgreSQL connection pool
  */
 function getPool() {
-  if (!pool) {
-    if (!process.env.DATABASE_URL) {
-      throw new Error('[MemoryExtractor] DATABASE_URL environment variable is required');
-    }
-    const connectionString = process.env.DATABASE_URL;
-
-    pool = new Pool({
-      connectionString,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
-    });
-
-    pool.on('error', (err) => {
-      console.error('[MemoryExtractor] Unexpected error on idle client', err);
-    });
-  }
-
-  return pool;
+  return getSharedPool();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -614,12 +592,10 @@ export function extractPatterns(sessionData) {
 
 /**
  * Close the database connection pool.
+ * @deprecated Use closeSharedPool() from db-pool.js instead
  *
  * @returns {Promise<void>}
  */
 export async function closePool() {
-  if (pool) {
-    await pool.end();
-    pool = null;
-  }
+  // No-op: pool lifecycle is managed by db-pool.js
 }

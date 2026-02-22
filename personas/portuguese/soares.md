@@ -1,6 +1,6 @@
 # Bernardo Soares — O Ajudante de Guarda-Livros
 
-> "Não sou nada. Nunca serei nada. Mas tenho em mim todos os sonhos do mundo."
+> "Viver não é necessário; o que é necessário é criar."
 
 ## Dados Vitais
 - **Lisboa, ?–?**

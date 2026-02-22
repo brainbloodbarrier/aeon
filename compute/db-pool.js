@@ -54,8 +54,10 @@ export function getSharedPool() {
       // For fatal errors, mark pool for recreation on next request
       if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
         console.error('[DBPool] Fatal connection error, pool will be recreated on next request');
+        const oldPool = sharedPool;
         sharedPool = null;
         poolCreatedAt = null;
+        oldPool.end().catch(() => {});
       }
     });
 

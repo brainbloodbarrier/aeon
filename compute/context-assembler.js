@@ -9,7 +9,7 @@
  * Feature: 002-invisible-infrastructure
  */
 
-import pg from 'pg';
+import { getSharedPool } from './db-pool.js';
 import { frameMemories } from './memory-framing.js';
 import { generateBehavioralHints } from './relationship-shaper.js';
 import { generateDriftCorrection } from './drift-correction.js';
@@ -34,31 +34,14 @@ import { processTheyAwareness, frameTheyContext } from './they-awareness.js';
 import { getPersonaAlignment, generateCounterforceHints, frameCounterforceContext } from './counterforce-tracker.js';
 import { getSessionArc, updateArc, analyzeMomentum, getPhaseEffects, generateArcContext, frameArcContext } from './narrative-gravity.js';
 import { processInterfaceBleed, frameBleedContext } from './interface-bleed.js';
-const { Pool } = pg;
-
-let pool = null;
 
 /**
- * Get or create database connection pool.
+ * Get database connection pool.
  *
  * @returns {Pool} PostgreSQL connection pool
  */
 function getPool() {
-  if (!pool) {
-    if (!process.env.DATABASE_URL) {
-      throw new Error('[ContextAssembler] DATABASE_URL environment variable is required');
-    }
-    const connectionString = process.env.DATABASE_URL;
-
-    pool = new Pool({
-      connectionString,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
-    });
-  }
-
-  return pool;
+  return getSharedPool();
 }
 
 /**
@@ -658,19 +641,20 @@ async function safeTheyAwarenessFetch(query, sessionId, personaId) {
   try {
     const theyResult = await processTheyAwareness(query, sessionId, personaId);
 
-    if (!theyResult || theyResult.level === 'OBLIVIOUS') {
+    if (!theyResult || theyResult.state === 'oblivious') {
       return null;
     }
 
-    const framed = frameTheyContext(theyResult);
+    // theyResult.context is already framed by processTheyAwareness
+    const framed = theyResult.context;
 
     await logOperation('they_awareness_detected', {
       sessionId,
       personaId,
       details: {
-        level: theyResult.level,
-        score: theyResult.score,
-        patterns_detected: theyResult.patterns?.length || 0
+        state: theyResult.state,
+        awareness: theyResult.awareness,
+        triggers_detected: theyResult.triggers?.length || 0
       },
       durationMs: Date.now() - startTime,
       success: true
@@ -712,7 +696,7 @@ async function safeCounterforceFetch(personaId, sessionId) {
       return null;
     }
 
-    const hints = await generateCounterforceHints(personaId, alignment);
+    const hints = generateCounterforceHints(alignment);
     const framed = frameCounterforceContext(alignment, hints);
 
     await logOperation('counterforce_alignment', {
@@ -758,14 +742,17 @@ async function safeNarrativeGravityFetch(sessionId, exchangeCount = 1) {
 
   try {
     const arc = await getSessionArc(sessionId);
-    const momentum = await analyzeMomentum(sessionId, exchangeCount);
-    const effects = await getPhaseEffects(arc?.phase || 'RISING');
+    // analyzeMomentum is synchronous: (message, currentPhase, currentMomentum)
+    // No user message is available at this scope, so pass empty string as default
+    const momentum = analyzeMomentum('', arc?.phase || 'rising', arc?.momentum || 0.5);
+    const effects = getPhaseEffects(arc?.phase || 'rising', arc?.momentum || 0.5);
 
     if (!arc && !effects) {
       return null;
     }
 
-    const context = await generateArcContext(sessionId, arc, momentum, effects);
+    // generateArcContext is synchronous and takes only the arc object
+    const context = generateArcContext(arc);
     const framed = frameArcContext(context);
 
     await logOperation('narrative_arc_fetch', {
@@ -819,7 +806,7 @@ async function safeInterfaceBleedFetch(sessionId, entropyLevel = 0) {
       return null;
     }
 
-    const framed = frameBleedContext(bleedResult);
+    const framed = frameBleedContext(bleedResult.bleeds);
 
     await logOperation('interface_bleed', {
       sessionId,

@@ -37,14 +37,14 @@ CREATE TABLE IF NOT EXISTS ambient_event_log (
     content TEXT NOT NULL,
     triggered_at TIMESTAMPTZ DEFAULT NOW(),
     entropy_at_trigger FLOAT,
-    session_id VARCHAR(100)
+    session_id UUID
 );
 
 -- Preterite memories (Pynchon: the passed-over)
 CREATE TABLE IF NOT EXISTS preterite_memories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    original_memory_id UUID,
-    user_id UUID,
+    original_memory_id UUID REFERENCES memories(id) ON DELETE SET NULL,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     persona_id UUID REFERENCES personas(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     preterite_reason VARCHAR(100),
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS preterite_memories (
 -- Zone boundary observations
 CREATE TABLE IF NOT EXISTS zone_observations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    session_id VARCHAR(100),
+    session_id UUID,
     persona_id UUID REFERENCES personas(id) ON DELETE CASCADE,
     observation_type VARCHAR(50) NOT NULL,
     topic_fragment TEXT,

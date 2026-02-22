@@ -47,6 +47,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Auto-update updated_at on persona_temporal_state
+CREATE TRIGGER persona_temporal_state_updated_at
+    BEFORE UPDATE ON persona_temporal_state
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at();
+
 -- View for temporal gaps
 CREATE OR REPLACE VIEW persona_temporal_gaps AS
 SELECT

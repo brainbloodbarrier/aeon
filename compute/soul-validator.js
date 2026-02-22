@@ -9,16 +9,17 @@
 
 import { createHash } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
-import pg from 'pg';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { getSharedPool } from './db-pool.js';
 
-const { Pool } = pg;
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Configuration for soul validation
  */
 export const CONFIG = {
-  PERSONAS_DIR: process.env.PERSONAS_DIR || './personas',
+  PERSONAS_DIR: process.env.PERSONAS_DIR || join(__dirname, '..', 'personas'),
   get DATABASE_URL() {
     if (!process.env.DATABASE_URL) {
       throw new Error('[SoulValidator] DATABASE_URL environment variable is required');
@@ -35,18 +36,12 @@ export const CONFIG = {
   HASH_ALGORITHM: 'sha256'
 };
 
-// Database connection pool (lazy initialized)
-let pool = null;
-
 /**
  * Get database connection pool
  * @returns {Pool} PostgreSQL connection pool
  */
 function getPool() {
-  if (!pool) {
-    pool = new Pool({ connectionString: CONFIG.DATABASE_URL });
-  }
-  return pool;
+  return getSharedPool();
 }
 
 /**
@@ -301,10 +296,8 @@ export async function validateSoulOrThrow(personaName) {
 
 /**
  * Close database connections (for cleanup)
+ * @deprecated Use closeSharedPool() from db-pool.js instead
  */
 export async function closePool() {
-  if (pool) {
-    await pool.end();
-    pool = null;
-  }
+  // No-op: pool lifecycle is managed by db-pool.js
 }

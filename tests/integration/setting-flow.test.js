@@ -18,8 +18,10 @@ let testUserId;
 let testPersonaId;
 
 // Database URL
-const DATABASE_URL = process.env.DATABASE_URL ||
-  'postgres://architect:matrix_secret@localhost:5432/aeon_matrix';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.warn('[Integration] DATABASE_URL not set, integration tests will be skipped');
+}
 
 // Check database connection before tests
 let dbAvailable = false;
@@ -94,12 +96,11 @@ beforeEach(async () => {
   );
 });
 
-const describeIf = (condition) => condition ? describe : describe.skip;
-
-describeIf(dbAvailable)('Setting Preservation Integration', () => {
+describe('Setting Preservation Integration', () => {
 
   describe('User Story 1: Returning to a Familiar Bar', () => {
     test('returns default setting for new user without preferences', async () => {
+      if (!dbAvailable) return;
       const { compileUserSetting } = await import('../../compute/setting-preserver.js');
 
       const setting = await compileUserSetting(testUserId, testPersonaId, 'test-session-1');
@@ -109,6 +110,7 @@ describeIf(dbAvailable)('Setting Preservation Integration', () => {
     });
 
     test('returns personalized setting after preferences are saved', async () => {
+      if (!dbAvailable) return;
       const { saveUserSettings, compileUserSetting } = await import('../../compute/setting-preserver.js');
 
       // Save preferences
@@ -125,6 +127,7 @@ describeIf(dbAvailable)('Setting Preservation Integration', () => {
     });
 
     test('persists settings across multiple compileUserSetting calls', async () => {
+      if (!dbAvailable) return;
       const { saveUserSettings, compileUserSetting } = await import('../../compute/setting-preserver.js');
 
       await saveUserSettings(testUserId, { timeOfDay: 'dawn' });
@@ -139,6 +142,7 @@ describeIf(dbAvailable)('Setting Preservation Integration', () => {
 
   describe('User Story 2: Atmosphere Customization', () => {
     test('extracts music preference from conversation', async () => {
+      if (!dbAvailable) return;
       const { extractSettingPreferences } = await import('../../compute/setting-extractor.js');
 
       const messages = [
@@ -151,6 +155,7 @@ describeIf(dbAvailable)('Setting Preservation Integration', () => {
     });
 
     test('extracts and saves settings at session end', async () => {
+      if (!dbAvailable) return;
       const { extractAndSaveSettings } = await import('../../compute/setting-extractor.js');
       const { loadUserSettings } = await import('../../compute/setting-preserver.js');
 
@@ -175,6 +180,7 @@ describeIf(dbAvailable)('Setting Preservation Integration', () => {
     });
 
     test('skips saving when confidence is too low', async () => {
+      if (!dbAvailable) return;
       const { extractAndSaveSettings } = await import('../../compute/setting-extractor.js');
 
       const result = await extractAndSaveSettings({
@@ -196,6 +202,7 @@ describeIf(dbAvailable)('Setting Preservation Integration', () => {
 
   describe('User Story 3: Persona-Specific Environments', () => {
     test('saves persona location from conversation', async () => {
+      if (!dbAvailable) return;
       const { savePersonaLocation, loadPersonaLocation } = await import('../../compute/setting-preserver.js');
 
       await savePersonaLocation(testUserId, testPersonaId, {
@@ -210,6 +217,7 @@ describeIf(dbAvailable)('Setting Preservation Integration', () => {
     });
 
     test('includes persona location in compiled setting', async () => {
+      if (!dbAvailable) return;
       const { savePersonaLocation, compileUserSetting } = await import('../../compute/setting-preserver.js');
 
       await savePersonaLocation(testUserId, testPersonaId, {
@@ -224,6 +232,7 @@ describeIf(dbAvailable)('Setting Preservation Integration', () => {
 
   describe('User Story 4: System Configuration', () => {
     test('saves and retrieves system config', async () => {
+      if (!dbAvailable) return;
       const { saveUserSettings, getSystemConfig } = await import('../../compute/setting-preserver.js');
 
       await saveUserSettings(testUserId, {
@@ -240,6 +249,7 @@ describeIf(dbAvailable)('Setting Preservation Integration', () => {
     });
 
     test('respects custom token budget in compilation', async () => {
+      if (!dbAvailable) return;
       const { saveUserSettings, compileUserSetting } = await import('../../compute/setting-preserver.js');
 
       // Save a very long custom text that would exceed normal budget
@@ -258,6 +268,7 @@ describeIf(dbAvailable)('Setting Preservation Integration', () => {
 
   describe('Full Context Assembly Integration', () => {
     test('includes personalized setting in assembled context', async () => {
+      if (!dbAvailable) return;
       const { saveUserSettings } = await import('../../compute/setting-preserver.js');
       const { assembleContext } = await import('../../compute/context-assembler.js');
 
@@ -278,6 +289,7 @@ describeIf(dbAvailable)('Setting Preservation Integration', () => {
     });
 
     test('extracts settings during session completion', async () => {
+      if (!dbAvailable) return;
       const { completeSession } = await import('../../compute/context-assembler.js');
       const { loadUserSettings } = await import('../../compute/setting-preserver.js');
 
@@ -305,6 +317,7 @@ describeIf(dbAvailable)('Setting Preservation Integration', () => {
 
   describe('Data Retention', () => {
     test('updates timestamp on settings touch', async () => {
+      if (!dbAvailable) return;
       const { saveUserSettings, touchUserSettings } = await import('../../compute/setting-preserver.js');
 
       await saveUserSettings(testUserId, { musicPreference: 'Fado' });

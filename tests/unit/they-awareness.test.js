@@ -12,10 +12,12 @@ const mockPool = {
   end: jest.fn()
 };
 
-jest.unstable_mockModule('pg', () => ({
-  default: {
-    Pool: jest.fn(() => mockPool)
-  }
+jest.unstable_mockModule('../../compute/db-pool.js', () => ({
+  getSharedPool: jest.fn(() => mockPool)
+}));
+
+jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
+  logOperation: jest.fn()
 }));
 
 // Import after mocking
@@ -149,25 +151,18 @@ describe('They Awareness Module', () => {
 
     it('should return string context for uneasy state', () => {
       const context = generateParanoiaContext(0.3);
-      if (context !== null) {
-        expect(typeof context).toBe('string');
-      }
+      expect(typeof context).toBe('string');
     });
 
     it('should return string context for paranoid state', () => {
       const context = generateParanoiaContext(0.7);
-      // May return string or null based on context availability
-      if (context !== null) {
-        expect(typeof context).toBe('string');
-      }
+      expect(typeof context).toBe('string');
     });
 
     it('should return context for awakened state', () => {
       const context = generateParanoiaContext(0.9);
-      if (context !== null) {
-        expect(typeof context).toBe('string');
-        expect(context.length).toBeGreaterThan(0);
-      }
+      expect(typeof context).toBe('string');
+      expect(context.length).toBeGreaterThan(0);
     });
   });
 
@@ -184,10 +179,8 @@ describe('They Awareness Module', () => {
         hints: ['Something feels off', 'The walls have ears']
       };
       const framed = frameTheyContext(paranoiaContext);
-      if (framed !== null) {
-        expect(typeof framed).toBe('string');
-        expect(framed.length).toBeGreaterThan(0);
-      }
+      expect(typeof framed).toBe('string');
+      expect(framed.length).toBeGreaterThan(0);
     });
 
     it('should handle string context input', () => {

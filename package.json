@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "AEON - The Pub at the End of Time: Persona-based AI system with persistent memory",
   "type": "module",
-  "main": "compute/index.js",
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPattern=tests/unit",

@@ -26,9 +26,8 @@ const mockPool = {
 };
 
 // ESM-compatible module mocking (must be before dynamic imports)
-jest.unstable_mockModule('pg', () => ({
-  default: { Pool: jest.fn(() => mockPool) },
-  Pool: jest.fn(() => mockPool)
+jest.unstable_mockModule('../../compute/db-pool.js', () => ({
+  getSharedPool: jest.fn(() => mockPool)
 }));
 
 jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
