@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # AEON System Instructions
 
 > Instructions for Claude when operating in this repository.
@@ -8,9 +12,53 @@ This repository summons **tight-persona outputs**. When the user brings a query,
 
 ## System Components
 
-- `/personas/` — Full dossiers (soul layer)
+- `/personas/` — Full dossiers (soul layer), organized by category
 - `/.claude/skills/aeon/` — Individual invocation skills
 - `/.claude/commands/` — Workflow slash commands
+- `compute/` — Node.js modules for memory, drift, and context operations
+- `db/init/` — PostgreSQL schema (init) and `db/migrations/` (incremental)
+
+---
+
+## Development Commands
+
+```bash
+# Run all tests
+npm test
+
+# Run only unit tests
+npm run test:unit
+
+# Run only integration tests
+npm run test:integration
+
+# Run a single test file
+node --experimental-vm-modules node_modules/jest/bin/jest.js tests/unit/drift-analyzer.test.js
+
+# Purge stale settings (>90 days inactive)
+node scripts/purge-settings.js
+```
+
+### Infrastructure
+
+```bash
+# First-time setup
+cp .env.example .env  # then edit DB_PASSWORD, etc.
+
+# Start PostgreSQL only (required for compute modules)
+docker compose up -d
+
+# Start with optional Neo4j graph DB
+docker compose --profile graph up -d
+
+# View logs / tear down
+docker compose logs -f
+docker compose down
+```
+
+**Required env var:** `DB_PASSWORD`. Optional: `NEO4J_PASSWORD`, `OPENAI_API_KEY`.
+
+**Database:** `aeon_matrix` on PostgreSQL 16 with pgvector. User: `architect`. Port: `5432`.
 
 ---
 
@@ -28,6 +76,9 @@ This repository summons **tight-persona outputs**. When the user brings a query,
 | `/scry [question]` | Enochian protocol (Nalvage/Ave/Madimi) |
 | `/magick [situation]` | Moore's narrative magic |
 | `/war [conflict]` | Sun Tzu + Machiavelli strategy |
+| `/summon-matrix [persona]` | Matrix-enabled persona invocation |
+| `/matrix-status` | View Matrix state and analytics |
+| `/drift-check [persona]` | Check voice drift metrics |
 
 ### Skills
 
@@ -51,7 +102,7 @@ All personas follow the universal style in `/.claude/skills/aeon/_style.md`:
 
 ### Response Format
 ```
-[PERSONA | domain | method]
+⟨ PERSONA_NAME | domínio | método ⟩
 
 [Response in persona voice — tight, dense, in character]
 ```
@@ -112,188 +163,68 @@ When you arrive with a question, the right ones turn to look.
 
 *"The law is my will."* — The User, upon entering.
 
-## Infrastructure
+---
 
-### Soul Layer (Constitution Principle I)
-- Personas stored in `/personas/*.md` with SHA-256 hashing
-- Soul files are immutable at runtime (mounted read-only in Docker)
-- Soul validator enforces structural integrity
+## Architecture
 
-### Memory Layer
-- PostgreSQL 16 with pgvector for embeddings
-- Tables: personas, users, conversations, interactions, relationships, memories
-- MCP server: `mcp-db-server` for database access
+### Constitution Principles
 
-### Invisible Infrastructure (Constitution Principle II) ✨ NEW
-All system operations are invisible to personas and users. Infrastructure includes:
+**I — Soul Layer:** Personas in `/personas/*.md` are immutable at runtime (Docker mounts read-only). SHA-256 hashes enforce integrity via `soul-validator.js`.
 
-**Compute Modules** (`compute/`):
-- `context-assembler.js` — Orchestrates invisible context injection
+**II — Invisible Infrastructure:** All system operations are invisible to personas and users. When a persona is invoked, `compute/context-assembler.js` silently injects: setting context, relationship behavioral hints (trust-based), framed memories, and drift corrections — within a 3000-token budget.
+
+Key compute modules:
+- `context-assembler.js` — Orchestrates context injection
 - `memory-framing.js` — Natural language memory formatting
 - `relationship-shaper.js` — Trust-based behavior shaping
 - `drift-correction.js` — Voice fidelity reinforcement
-- `operator-logger.js` — Silent operation logging
+- `operator-logger.js` — Silent operation logging (never exposed to users)
 
-**Database Components** (Migration 003):
-- `operator_logs` — Silent logging (never exposed to users)
-- `context_templates` — Natural language framing templates
-- Views: `operator_session_summary`, `recent_drift_corrections`, `context_budget_usage`
-- Functions: `log_operation()`, `get_context_template()`, `update_relationship_silently()`
+**III — Voice Fidelity:** Real-time drift detection via `drift-analyzer.js` (< 100ms). Severity: STABLE (≤0.1) / MINOR (0.1-0.3) / WARNING (0.3-0.5) / CRITICAL (>0.5). Universal forbidden phrases: generic AI self-reference, helpfulness filler, hedging/disclaimers.
 
-**Context Assembly**:
-When a persona is invoked, `assembleContext()` invisibly injects:
-1. Setting context ("It is 2 AM at O Fim...")
-2. Relationship behavioral hints (based on trust level)
-3. Framed memories (natural language, not database rows)
-4. Drift corrections (as "[Inner voice: ...]" if needed)
+**IV — Relationship Continuity:** Trust levels progress STRANGER → ACQUAINTANCE → FAMILIAR → CONFIDANT based on familiarity score (0.0–1.0). Updated via `relationship-tracker.js`; memorable exchanges extracted by `memory-extractor.js`.
 
-All within a 3000-token budget. Truncation is silent. Errors fallback gracefully.
+**V — Setting Preservation:** `setting-preserver.js` + `setting-extractor.js` maintain personalized atmosphere per user/persona pair. Settings expire after 90 days of inactivity.
 
-**Testing**:
-Run `node scripts/test-invisible-context.js` to validate natural language output
+### Pynchon Stack
 
-### Voice Fidelity (Constitution Principle III) ✨ NEW
-Real-time monitoring of persona voice authenticity. Detects drift toward generic AI patterns.
+Additional compute modules implementing paranoid realism:
 
-**Compute Modules** (`compute/`):
-- `soul-marker-extractor.js` — Extracts vocabulary, tone, patterns from soul files
-- `drift-analyzer.js` — Analyzes responses for voice drift (< 100ms)
-- `drift-dashboard.js` — Aggregate statistics for operator monitoring
+**Phase 1** (Temporal Consciousness):
+- `temporal-awareness.js` — Non-linear time perception
+- `entropy-tracker.js` + `ambient-generator.js` — System entropy and atmosphere
+- `zone-boundary-detector.js` — Boundary crossing detection
+- `preterite-memory.js` — Forgotten/overlooked history retrieval
 
-**Drift Severity Levels**:
-- STABLE (≤0.1): Persona voice is authentic
-- MINOR (0.1-0.3): Slight drift, acceptable
-- WARNING (0.3-0.5): Noticeable drift, review needed
-- CRITICAL (>0.5): Significant drift, immediate attention
+**Phase 2** (They Awareness):
+- `they-awareness.js` — Systemic surveillance patterns
+- `counterforce-tracker.js` — Resistance and counter-narrative
+- `narrative-gravity.js` — Story momentum and inevitability
+- `interface-bleed.js` — Reality/fiction boundary erosion
 
-**Database Components** (Migration 004):
-- `personas.drift_check_enabled` — Per-persona drift checking toggle
-- `personas.drift_threshold` — Custom WARNING threshold
-- Views: `persona_drift_summary`, `trending_violations`, `drift_time_series`
-- Function: `get_persona_drift_stats(persona_id, hours)`
+### Database Schema
 
-**Universal Forbidden Phrases** (generic AI detection):
-- AI self-reference: "as an ai", "as a language model"
-- Generic helpfulness: "i'd be happy to", "great question", "certainly"
-- Hedging/disclaimers: "it's important to note", "i apologize"
+Core tables: `personas`, `users`, `conversations`, `interactions`, `relationships`, `memories`, `operator_logs`, `context_templates`, `user_settings`.
 
-**Usage**:
+Migrations in `db/migrations/` (002, 006, 008–010). Init schema in `db/init/001_schema.sql`.
+
+### MCP Integration
+
+MCP servers run outside Docker, configured in Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+- `aeon-db` → `mcp-db-server` with `DATABASE_URL`
+- `aeon-compute` → `node-code-sandbox-mcp`
+
+### Testing
+
+Uses Jest 29 with `--experimental-vm-modules` (ES Modules project). Unit tests mock `db-pool.js` (shared pool). Integration tests in `tests/integration/` require a live database.
+
+**ESM mocking pattern** (gotcha — standard `jest.mock` doesn't work with ES Modules):
 ```javascript
-import { analyzeDrift } from './compute/drift-analyzer.js';
-const analysis = await analyzeDrift(response, 'hegel', sessionId);
-// Returns: { driftScore, severity, warnings, genericAIDetected, ... }
+import { jest } from '@jest/globals';
+const mockQuery = jest.fn();
+jest.unstable_mockModule('../../compute/db-pool.js', () => ({
+  getSharedPool: jest.fn(() => ({ query: mockQuery, end: jest.fn() }))
+}));
+// Import module AFTER mock setup
+const { myFunction } = await import('../../compute/my-module.js');
 ```
-
-**Dashboard**:
-```javascript
-import { getDriftOverview, getPersonaDriftSummary } from './compute/drift-dashboard.js';
-const overview = await getDriftOverview();
-const summary = await getPersonaDriftSummary(24); // last 24 hours
-```
-
-### Relationship Continuity (Constitution Principle IV) ✨ NEW
-Personas remember returning users and adjust behavior based on relationship history.
-
-**Compute Modules** (`compute/`):
-- `relationship-tracker.js` — Familiarity tracking and trust progression
-- `memory-extractor.js` — Memorable exchange extraction and storage
-
-**Trust Level Progression**:
-- STRANGER (familiarity < 0.2): Formal, reserved
-- ACQUAINTANCE (0.2-0.5): Warmer, acknowledges history
-- FAMILIAR (0.5-0.8): Comfortable, shares opinions
-- CONFIDANT (≥ 0.8): Candid, intimate
-
-**Familiarity Updates**:
-- Base delta: 0.02 per session
-- Quality multiplier: 0.5-2.0 (based on engagement)
-- Max per session: 0.05
-
-**Database Components** (Migration 005):
-- Views: `relationship_overview`, `relationship_activity`, `trust_level_transitions`
-- Functions: `update_relationship_with_familiarity()`, `get_trust_level()`
-- Index: `idx_memories_user_persona`
-
-**Usage**:
-```javascript
-import { ensureRelationship, updateFamiliarity } from './compute/relationship-tracker.js';
-import { extractSessionMemories, getRecentMemories } from './compute/memory-extractor.js';
-
-// At session start
-const relationship = await ensureRelationship(userId, personaId);
-
-// At session end
-const result = await updateFamiliarity(userId, personaId, {
-  messageCount: 10,
-  durationMs: 300000,
-  hasFollowUps: true,
-  topicDepth: 2
-});
-
-// Extract and store memories
-const memories = await extractSessionMemories(sessionData);
-if (memories.length > 0) {
-  await storeSessionMemories(userId, personaId, memories);
-}
-```
-
-**Dashboard**:
-```javascript
-import { getRelationshipOverview, getRecentActivity } from './compute/relationship-tracker.js';
-const overview = await getRelationshipOverview(24); // last 24 hours
-const activity = await getRecentActivity(24, 100);
-```
-
-### Setting Preservation (Constitution Principle V)
-The bar itself remembers you. Its atmosphere adapts to returning patrons while maintaining its essential character.
-
-**Compute Modules** (`compute/`):
-- `setting-preserver.js` — Load, save, and compile personalized settings
-- `setting-extractor.js` — Extract setting preferences from conversation
-
-**Preference Types**:
-- Music: "Fado", "Bowie", "jazz", "silence"
-- Atmosphere: humidity, lighting, temperature, sound
-- Location: "corner booth", "bar counter", "window seat"
-- Time of Day: "dawn", "midnight", "sunset"
-- Persona Location: Where each persona-user pair meets
-
-**Database Components** (Migration 006):
-- `user_settings` table — Global user atmosphere preferences
-- `relationships.preferred_location` — Per-persona meeting spot
-- Views: `user_settings_overview`, `setting_activity`
-- Functions: `purge_stale_settings()`, `touch_user_settings()`
-
-**Data Retention**:
-- Settings expire after 90 days of inactivity
-- Daily purge via `purge_stale_settings()` cron job
-- `touch_user_settings()` resets expiration on activity
-
-**Usage**:
-```javascript
-import { compileUserSetting, saveUserSettings } from './compute/setting-preserver.js';
-import { extractAndSaveSettings } from './compute/setting-extractor.js';
-
-// At context assembly (replaces getSettingContext)
-const setting = await compileUserSetting(userId, personaId, sessionId);
-// Returns: "It is dawn at O Fim. Fado drifts from the jukebox. You exist in this moment at your usual corner booth."
-
-// At session end
-const result = await extractAndSaveSettings(sessionData);
-// Extracts preferences from conversation and saves them
-```
-
-**Token Budget**: 200 tokens default, configurable via `system_config.token_budget`
-
-## Active Technologies
-- JavaScript (Node.js 18+) for compute modules; SQL for database functions + Existing compute modules (drift-detection.js, operator-logger.js), PostgreSQL 16, Docker (003-voice-fidelity)
-- PostgreSQL (aeon_matrix database) - extends existing schema (drift_alerts, personas tables) (003-voice-fidelity)
-- JavaScript (Node.js 18+, ES Modules) + pg (PostgreSQL driver), existing compute modules (operator-logger.js, relationship-shaper.js) (004-relationship-continuity)
-- PostgreSQL 15+ (existing AEON database) (004-relationship-continuity)
-- JavaScript (Node.js 18+ ES Modules) + pg (PostgreSQL driver) - already in use (005-setting-preservation)
-- PostgreSQL 16 (existing `aeon_matrix` database) (005-setting-preservation)
-- JavaScript (Node.js 18+, ES Modules) + `pg` (PostgreSQL driver) - already in use (005-setting-preservation)
-
-## Recent Changes
-- 005-setting-preservation: Added setting-preserver.js and setting-extractor.js compute modules; user_settings table; personalized atmosphere preferences; context-assembler integration
-- 003-voice-fidelity: Added JavaScript (Node.js 18+) for compute modules; SQL for database functions + Existing compute modules (drift-detection.js, operator-logger.js), PostgreSQL 16, Docker

@@ -27,3 +27,6 @@ npm-debug.log*
 
 # Database data (if running locally)
 db/data/
+
+# Test coverage
+coverage/

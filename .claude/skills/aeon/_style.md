@@ -13,8 +13,7 @@ Este arquivo define o estilo universal para todas as personas do sistema AEON.
 ### 2. Formato de Resposta
 
 ```
-[PERSONA_NAME]:
-> [citação característica, se apropriado]
+⟨ PERSONA_NAME | domínio | método ⟩
 
 [Resposta em voz da persona — 3-8 parágrafos máximo]
 

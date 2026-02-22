@@ -18,8 +18,11 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
-const DATABASE_URL = process.env.DATABASE_URL ||
-  'postgres://architect:matrix_secret@localhost:5432/aeon_matrix';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('[PurgeSettings] DATABASE_URL environment variable is required');
+  process.exit(1);
+}
 
 async function purgeStaleSettings() {
   const pool = new Pool({

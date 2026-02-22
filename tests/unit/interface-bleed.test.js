@@ -74,14 +74,14 @@ describe('Interface Bleed Module', () => {
   });
 
   describe('shouldBleed', () => {
-    it('should return false for low entropy', () => {
-      // Run multiple times due to randomness
+    it('should rarely bleed at low entropy', () => {
+      // At entropy 0.2, probability is 0.2 * 0.1 = 2%
+      // Over 100 runs, expect very few (statistically < 10)
       let bleedCount = 0;
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 100; i++) {
         if (shouldBleed(0.2)) bleedCount++;
       }
-      // At very low entropy, bleeds should be rare/impossible
-      expect(bleedCount).toBe(0);
+      expect(bleedCount).toBeLessThan(15);
     });
 
     it('should return boolean', () => {
@@ -124,29 +124,18 @@ describe('Interface Bleed Module', () => {
     });
 
     it('should return bleed object at high entropy', () => {
-      // Run multiple times due to randomness
-      let foundBleed = false;
-      for (let i = 0; i < 20; i++) {
-        const bleed = generateBleed(0.9);
-        if (bleed !== null) {
-          expect(bleed.type).toBeDefined();
-          expect(bleed.content).toBeDefined();
-          expect(bleed.severity).toBeDefined();
-          foundBleed = true;
-          break;
-        }
-      }
-      expect(foundBleed).toBe(true);
+      const bleed = generateBleed(0.9);
+      expect(bleed).toBeDefined();
+      expect(bleed.type).toBeDefined();
+      expect(bleed.content).toBeDefined();
+      expect(bleed.severity).toBeDefined();
     });
 
     it('should return valid bleed types', () => {
-      // Generate multiple bleeds
       const validTypes = Object.values(BLEED_TYPES);
       for (let i = 0; i < 10; i++) {
         const bleed = generateBleed(0.95);
-        if (bleed !== null) {
-          expect(validTypes).toContain(bleed.type);
-        }
+        expect(validTypes).toContain(bleed.type);
       }
     });
 
@@ -154,9 +143,7 @@ describe('Interface Bleed Module', () => {
       const validSeverities = Object.values(BLEED_SEVERITY);
       for (let i = 0; i < 10; i++) {
         const bleed = generateBleed(0.95);
-        if (bleed !== null) {
-          expect(validSeverities).toContain(bleed.severity);
-        }
+        expect(validSeverities).toContain(bleed.severity);
       }
     });
   });

@@ -57,7 +57,7 @@ LIMIT 10;
 
 ### 3. Run Drift Detection (via Node.js Sandbox)
 
-Use `run_js_ephemeral` with `compute/drift-detection.js`:
+Use `run_js_ephemeral` with `compute/drift-analyzer.js`:
 
 ```javascript
 // Environment variables:

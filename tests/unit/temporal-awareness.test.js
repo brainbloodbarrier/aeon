@@ -12,10 +12,12 @@ const mockPool = {
   end: jest.fn()
 };
 
-jest.unstable_mockModule('pg', () => ({
-  default: {
-    Pool: jest.fn(() => mockPool)
-  }
+jest.unstable_mockModule('../../compute/db-pool.js', () => ({
+  getSharedPool: jest.fn(() => mockPool)
+}));
+
+jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
+  logOperation: jest.fn()
 }));
 
 // Import after mocking

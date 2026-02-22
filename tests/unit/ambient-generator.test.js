@@ -12,10 +12,12 @@ const mockPool = {
   end: jest.fn()
 };
 
-jest.unstable_mockModule('pg', () => ({
-  default: {
-    Pool: jest.fn(() => mockPool)
-  }
+jest.unstable_mockModule('../../compute/db-pool.js', () => ({
+  getSharedPool: jest.fn(() => mockPool)
+}));
+
+jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
+  logOperation: jest.fn()
 }));
 
 // Import after mocking
@@ -32,7 +34,7 @@ describe('Ambient Generator Module', () => {
   describe('getTimeOfNight', () => {
     it('should return a valid time of night classification', () => {
       const timeOfNight = getTimeOfNight();
-      expect(['deep_night', 'pre_dawn', 'twilight', 'any']).toContain(timeOfNight);
+      expect(['deep_night', 'pre_dawn', 'twilight']).toContain(timeOfNight);
     });
 
     it('should return a string', () => {

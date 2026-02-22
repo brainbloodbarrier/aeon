@@ -12,10 +12,12 @@ const mockPool = {
   end: jest.fn()
 };
 
-jest.unstable_mockModule('pg', () => ({
-  default: {
-    Pool: jest.fn(() => mockPool)
-  }
+jest.unstable_mockModule('../../compute/db-pool.js', () => ({
+  getSharedPool: jest.fn(() => mockPool)
+}));
+
+jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
+  logOperation: jest.fn()
 }));
 
 // Import after mocking
@@ -143,10 +145,7 @@ describe('Entropy Tracker Module', () => {
   describe('getRandomMarker', () => {
     it('should return a string for any entropy level', () => {
       const marker = getRandomMarker(0.1);
-      // May return a marker even at low entropy (stable markers exist)
-      if (marker !== null) {
-        expect(typeof marker).toBe('string');
-      }
+      expect(typeof marker).toBe('string');
     });
 
     it('should return a string marker for higher entropy', () => {

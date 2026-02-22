@@ -17,7 +17,17 @@
 
 1. **Identify persona and category**
    - Parse the persona name from input
-   - Map to category (portuguese, philosophers, magicians, etc.)
+   - Map to category using the following table:
+
+   | Persona | Category |
+   |---------|----------|
+   | pessoa, caeiro, reis, campos, soares | portuguese |
+   | hegel, socrates, diogenes | philosophers |
+   | moore, dee, crowley, choronzon | magicians |
+   | tesla, feynman, lovelace | scientists |
+   | vito, michael, suntzu, machiavelli | strategists |
+   | hermes, prometheus, cassandra | mythic |
+   | nalvage, ave, madimi | enochian |
 
 2. **Load soul template**
    - Read `personas/{category}/{persona}.md` for full dossier

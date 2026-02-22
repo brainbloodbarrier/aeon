@@ -88,7 +88,7 @@ VALUES (
     'It is {time} at {location}. {atmosphere}. {music}. You exist in this moment.',
     20
 )
-ON CONFLICT (template_type, subtype, persona_id)
+ON CONFLICT (template_type, subtype) WHERE persona_id IS NULL
 DO UPDATE SET template = EXCLUDED.template, priority = EXCLUDED.priority;
 
 -- ═══════════════════════════════════════════════════════════════════════════

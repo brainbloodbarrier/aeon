@@ -12,10 +12,12 @@ const mockPool = {
   end: jest.fn()
 };
 
-jest.unstable_mockModule('pg', () => ({
-  default: {
-    Pool: jest.fn(() => mockPool)
-  }
+jest.unstable_mockModule('../../compute/db-pool.js', () => ({
+  getSharedPool: jest.fn(() => mockPool)
+}));
+
+jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
+  logOperation: jest.fn()
 }));
 
 // Import after mocking
@@ -69,13 +71,11 @@ describe('Counterforce Tracker Module', () => {
     });
 
     it('should factor in topic type', () => {
-      // High resistance topics should trigger resistance at lower scores
       const moderateScore = 0.4;
-      const resistAuthority = wouldResist(moderateScore, 'authority');
-      const resistRoutine = wouldResist(moderateScore, 'routine');
-      // Authority resistance should be more likely than routine
-      expect(typeof resistAuthority).toBe('boolean');
-      expect(typeof resistRoutine).toBe('boolean');
+      // authority multiplier 1.0, lower threshold -> more likely to resist
+      expect(wouldResist(moderateScore, 'authority')).toBe(true);
+      // routine multiplier 0.5, higher threshold -> less likely to resist
+      expect(wouldResist(moderateScore, 'routine')).toBe(false);
     });
   });
 
@@ -121,11 +121,8 @@ describe('Counterforce Tracker Module', () => {
         alignmentScore: 0.8,
         resistanceStyle: 'cynical'
       });
-      // May return null if no hints available for this config
-      if (hints !== null) {
-        expect(typeof hints).toBe('string');
-        expect(hints.length).toBeGreaterThan(0);
-      }
+      expect(typeof hints).toBe('string');
+      expect(hints.length).toBeGreaterThan(0);
     });
 
     it('should return null for collaborator alignment', () => {
@@ -149,10 +146,9 @@ describe('Counterforce Tracker Module', () => {
         alignmentScore: 0.9,
         resistanceStyle: 'chaotic'
       });
-      // Both may be null or strings, but if both exist they should differ
-      if (cynicalHints !== null && chaoticHints !== null) {
-        expect(cynicalHints).not.toEqual(chaoticHints);
-      }
+      expect(typeof cynicalHints).toBe('string');
+      expect(typeof chaoticHints).toBe('string');
+      expect(cynicalHints).not.toEqual(chaoticHints);
     });
   });
 
@@ -166,10 +162,8 @@ describe('Counterforce Tracker Module', () => {
       const alignment = { alignmentType: 'counterforce', alignmentScore: 0.8, resistanceStyle: 'cynical' };
       const hints = 'Question authority. Mock pretense.';
       const framed = frameCounterforceContext(alignment, hints);
-      if (framed !== null) {
-        expect(typeof framed).toBe('string');
-        expect(framed.length).toBeGreaterThan(0);
-      }
+      expect(typeof framed).toBe('string');
+      expect(framed.length).toBeGreaterThan(0);
     });
 
     it('should handle null hints gracefully', () => {
