@@ -155,7 +155,7 @@ function parseTable(tableText) {
 
 /**
  * Extract vocabulary terms from a section of text.
- * Looks for bold terms, table keys, and code-block items.
+ * Looks for bold terms, table keys, and uppercase label lines (e.g. 'TESE -> ...').
  *
  * @param {string} text - Section text
  * @returns {string[]} Extracted terms

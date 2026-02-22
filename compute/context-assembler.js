@@ -645,7 +645,6 @@ async function safeTheyAwarenessFetch(query, sessionId, personaId) {
       return null;
     }
 
-    // theyResult.context is already framed by processTheyAwareness
     const framed = theyResult.context;
 
     await logOperation('they_awareness_detected', {
@@ -758,7 +757,7 @@ async function safeNarrativeGravityFetch(sessionId, exchangeCount = 1) {
     await logOperation('narrative_arc_fetch', {
       sessionId,
       details: {
-        phase: arc?.phase || 'RISING',
+        phase: arc?.phase || 'rising',
         momentum: momentum?.trend || 'neutral',
         effects_count: effects?.length || 0
       },
