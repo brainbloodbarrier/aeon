@@ -200,9 +200,9 @@ export const CONFIG = {
   TRUST_BEHAVIORS,
   TRUST_LEVELS: ['stranger', 'acquaintance', 'familiar', 'confidant'],
   TRUST_THRESHOLDS: {
-    stranger: 0,      // 0-4 interactions
-    acquaintance: 5,  // 5-19 interactions
-    familiar: 20,     // 20-49 interactions
-    confidant: 50     // 50+ interactions
+    stranger: 0,        // familiarity_score < 0.2
+    acquaintance: 0.2,  // familiarity_score 0.2-0.49
+    familiar: 0.5,      // familiarity_score 0.5-0.79
+    confidant: 0.8      // familiarity_score >= 0.8
   }
 };

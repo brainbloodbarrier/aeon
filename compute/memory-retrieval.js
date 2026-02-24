@@ -13,7 +13,13 @@
  */
 
 // Parse inputs
-const allMemories = JSON.parse(process.env.MEMORIES || '[]');
+let allMemories;
+try {
+  allMemories = JSON.parse(process.env.MEMORIES || '[]');
+} catch (error) {
+  console.error(JSON.stringify({ error: 'Failed to parse MEMORIES', message: error.message }));
+  process.exit(1);
+}
 const currentQuery = process.env.QUERY || '';
 const maxMemories = parseInt(process.env.MAX_MEMORIES || '5', 10);
 

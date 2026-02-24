@@ -432,8 +432,13 @@ export async function incrementAwareness(delta, reason, sessionId) {
       success: false,
     }).catch(() => {});
 
-    // Return current state on failure
-    return await getParanoiaState();
+    // Return defaults directly (avoid calling DB again when DB is failing)
+    return {
+      level: 0.1,
+      state: AWARENESS_STATES.OBLIVIOUS,
+      lastSpike: null,
+      spikeCount: 0,
+    };
   }
 }
 
@@ -498,8 +503,13 @@ export async function decayAwareness(hours = 1) {
   } catch (error) {
     console.error('[TheyAwareness] Error decaying awareness:', error.message);
 
-    // Return current state on failure
-    return await getParanoiaState();
+    // Return defaults directly (avoid calling DB again when DB is failing)
+    return {
+      level: 0.1,
+      state: AWARENESS_STATES.OBLIVIOUS,
+      lastSpike: null,
+      spikeCount: 0,
+    };
   }
 }
 

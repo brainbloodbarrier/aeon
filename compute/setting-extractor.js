@@ -314,7 +314,7 @@ function calculateConfidence(prefs) {
  * @param {number} sessionData.endedAt - Session end timestamp
  * @returns {Promise<Object>} Extraction result
  */
-export async function extractAndSaveSettings(sessionData) {
+export async function extractAndSaveSettings(sessionData, client = null) {
   const startTime = Date.now();
 
   // Input validation: ensure sessionData is a valid object with required fields

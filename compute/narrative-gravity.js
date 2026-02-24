@@ -450,11 +450,11 @@ export function analyzeMomentum(message, currentPhase, currentMomentum) {
  * @property {boolean} phaseChanged - Whether phase transitioned
  * @property {string|null} previousPhase - Phase before update (if changed)
  */
-export async function updateArc(sessionId, momentumDelta) {
+export async function updateArc(sessionId, momentumDelta, client = null) {
   const startTime = performance.now();
 
   try {
-    const db = getSharedPool();
+    const db = client || getSharedPool();
 
     // Get current arc
     const currentArc = await getSessionArc(sessionId);

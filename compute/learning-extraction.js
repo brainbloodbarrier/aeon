@@ -19,8 +19,15 @@
  * Output: JSON with extracted learnings
  */
 
-const interaction = JSON.parse(process.env.INTERACTION || '{}');
-const userHistory = JSON.parse(process.env.USER_HISTORY || '[]');
+let interaction;
+let userHistory;
+try {
+  interaction = JSON.parse(process.env.INTERACTION || '{}');
+  userHistory = JSON.parse(process.env.USER_HISTORY || '[]');
+} catch (error) {
+  console.error(JSON.stringify({ error: 'Failed to parse environment inputs', message: error.message }));
+  process.exit(1);
+}
 
 /**
  * Extract topic keywords from text.

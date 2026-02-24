@@ -284,7 +284,6 @@ export async function loadPersonaMarkers(personaName) {
 
   if (!filePath) {
     console.error(`[SoulMarkerExtractor] Persona file not found for "${personaName}"`);
-    markersCache.set(cacheKey, DEFAULT_MARKERS);
     return DEFAULT_MARKERS;
   }
 
@@ -348,7 +347,6 @@ export async function loadPersonaMarkers(personaName) {
 
   } catch (error) {
     console.error(`[SoulMarkerExtractor] Error reading persona file for "${personaName}":`, error.message);
-    markersCache.set(cacheKey, DEFAULT_MARKERS);
     return DEFAULT_MARKERS;
   }
 }

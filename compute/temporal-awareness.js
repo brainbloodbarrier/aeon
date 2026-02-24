@@ -368,7 +368,7 @@ async function getLastActive(personaId) {
  * @param {Object} [updates.metadata] - Additional metadata
  * @returns {Promise<Object>} Updated temporal state
  */
-export async function touchTemporalState(personaId, updates = {}) {
+export async function touchTemporalState(personaId, updates = {}, client = null) {
   const startTime = performance.now();
 
   const {
@@ -378,7 +378,7 @@ export async function touchTemporalState(personaId, updates = {}) {
   } = updates;
 
   try {
-    const db = getPool();
+    const db = client || getPool();
 
     const result = await db.query(`
       INSERT INTO persona_temporal_state (persona_id, last_active, last_topic, metadata)

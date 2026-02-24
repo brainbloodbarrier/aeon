@@ -12,10 +12,16 @@
   "jest": {
     "testEnvironment": "node",
     "transform": {},
-    "moduleFileExtensions": ["js", "mjs"],
-    "testMatch": ["**/tests/**/*.test.js"]
+    "moduleFileExtensions": [
+      "js",
+      "mjs"
+    ],
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ]
   },
   "dependencies": {
+    "openai": "^6.25.0",
     "pg": "^8.11.3"
   },
   "devDependencies": {

@@ -20,7 +20,13 @@
  */
 
 const response = process.env.RESPONSE || '';
-const soulMarkers = JSON.parse(process.env.SOUL_MARKERS || '{}');
+let soulMarkers;
+try {
+  soulMarkers = JSON.parse(process.env.SOUL_MARKERS || '{}');
+} catch (error) {
+  console.error(JSON.stringify({ error: 'Failed to parse SOUL_MARKERS', message: error.message }));
+  process.exit(1);
+}
 
 /**
  * Calculate voice drift score.
@@ -94,7 +100,7 @@ function analyzeDrift(text, markers) {
           analysis.driftScore += 0.1;
         }
       } catch (e) {
-        // Invalid regex, skip
+        console.warn(`[DriftDetection] Skipping invalid regex pattern: ${e.message}`);
       }
     }
   }

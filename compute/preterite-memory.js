@@ -284,11 +284,11 @@ function determinePreteriteReason(memory, score) {
  * @param {string} reason - Preterite reason from PRETERITE_REASONS
  * @returns {Promise<string|null>} Preterite entry ID or null on failure
  */
-export async function consignToPreterite(memory, reason) {
+export async function consignToPreterite(memory, reason, client = null) {
   const startTime = performance.now();
 
   try {
-    const db = getSharedPool();
+    const db = client || getSharedPool();
 
     // Store in preterite table
     const result = await db.query(

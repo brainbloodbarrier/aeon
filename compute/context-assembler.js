@@ -9,13 +9,16 @@
  * Feature: 002-invisible-infrastructure
  */
 
-import { getSharedPool } from './db-pool.js';
+import { getSharedPool, withTransaction } from './db-pool.js';
 import { frameMemories } from './memory-framing.js';
 import { generateBehavioralHints } from './relationship-shaper.js';
 import { generateDriftCorrection } from './drift-correction.js';
+import { analyzeDrift } from './drift-analyzer.js';
+import { loadPersonaMarkers } from './soul-marker-extractor.js';
+import { validateSoulCached, alertOnCritical } from './soul-validator.js';
 import { logOperation, logOperationBatch } from './operator-logger.js';
 import { ensureRelationship, updateFamiliarity } from './relationship-tracker.js';
-import { extractSessionMemories, storeSessionMemories } from './memory-extractor.js';
+import { extractSessionMemories, storeSessionMemories, generateEmbedding } from './memory-extractor.js';
 import { compileUserSetting } from './setting-preserver.js';
 import { extractAndSaveSettings } from './setting-extractor.js';
 // Persona Autonomy imports (Constitution Principle VI)
@@ -137,16 +140,48 @@ async function safeMemoryRetrieval(personaId, userId, query, sessionId) {
 
   try {
     const db = getPool();
+    let strategy = 'importance_and_recency';
+    let result;
 
-    // Retrieve recent memories for this persona-user pair
-    const result = await db.query(
-      `SELECT id, memory_type, content, importance_score, created_at
-       FROM memories
-       WHERE persona_id = $1 AND user_id = $2
-       ORDER BY importance_score DESC, created_at DESC
-       LIMIT 10`,
-      [personaId, userId]
-    );
+    // Try hybrid retrieval if we can generate an embedding for the query
+    const queryEmbedding = await generateEmbedding(query);
+
+    if (queryEmbedding) {
+      // Hybrid: semantic similarity (60%) + importance (40%)
+      result = await db.query(
+        `SELECT id, memory_type, content, importance_score, created_at,
+           (0.6 * (1.0 - (embedding <=> $3::vector)) + 0.4 * importance_score) AS hybrid_score
+         FROM memories
+         WHERE persona_id = $1 AND user_id = $2 AND embedding IS NOT NULL
+         ORDER BY hybrid_score DESC
+         LIMIT 10`,
+        [personaId, userId, JSON.stringify(queryEmbedding)]
+      );
+      strategy = 'hybrid';
+
+      // If no embedded memories exist yet, fall back to importance+recency
+      if (result.rows.length === 0) {
+        result = await db.query(
+          `SELECT id, memory_type, content, importance_score, created_at
+           FROM memories
+           WHERE persona_id = $1 AND user_id = $2
+           ORDER BY importance_score DESC, created_at DESC
+           LIMIT 10`,
+          [personaId, userId]
+        );
+        strategy = 'hybrid_fallback_to_importance';
+      }
+    } else {
+      // No embedding available — use importance+recency
+      result = await db.query(
+        `SELECT id, memory_type, content, importance_score, created_at
+         FROM memories
+         WHERE persona_id = $1 AND user_id = $2
+         ORDER BY importance_score DESC, created_at DESC
+         LIMIT 10`,
+        [personaId, userId]
+      );
+    }
 
     await logOperation('memory_retrieval', {
       sessionId,
@@ -155,7 +190,7 @@ async function safeMemoryRetrieval(personaId, userId, query, sessionId) {
       details: {
         memories_selected: result.rows.length,
         total_available: result.rows.length,
-        selection_strategy: 'importance_and_recency'
+        selection_strategy: strategy
       },
       durationMs: Date.now() - startTime,
       success: true
@@ -431,7 +466,7 @@ async function safeAmbientFetch(sessionId, personaId = null) {
   try {
     const ambientDetails = await generateAmbientDetails(sessionId, personaId);
 
-    if (!ambientDetails || ambientDetails.events.length === 0) {
+    if (!ambientDetails || !ambientDetails.microEvents || ambientDetails.microEvents.length === 0) {
       return null;
     }
 
@@ -441,7 +476,7 @@ async function safeAmbientFetch(sessionId, personaId = null) {
       sessionId,
       personaId,
       details: {
-        event_count: ambientDetails.events.length,
+        event_count: ambientDetails.microEvents.length,
         time_of_night: ambientDetails.timeOfNight,
         entropy_level: ambientDetails.entropyLevel
       },
@@ -691,7 +726,7 @@ async function safeCounterforceFetch(personaId, sessionId) {
   try {
     const alignment = await getPersonaAlignment(personaId);
 
-    if (!alignment || alignment.type === 'NEUTRAL') {
+    if (!alignment || alignment.alignmentType === 'neutral') {
       return null;
     }
 
@@ -702,9 +737,9 @@ async function safeCounterforceFetch(personaId, sessionId) {
       sessionId,
       personaId,
       details: {
-        type: alignment.type,
-        score: alignment.score,
-        style: alignment.style
+        type: alignment.alignmentType,
+        score: alignment.alignmentScore,
+        style: alignment.resistanceStyle
       },
       durationMs: Date.now() - startTime,
       success: true
@@ -836,6 +871,118 @@ async function safeInterfaceBleedFetch(sessionId, entropyLevel = 0) {
 }
 
 /**
+ * Safely validate soul file integrity at invocation time.
+ * Constitution Principle I: Soul Immutability.
+ *
+ * @param {string} personaSlug - Persona slug name
+ * @param {string} sessionId - Session UUID
+ * @returns {Promise<boolean>} True if valid or validation skipped, false if tampered
+ */
+async function safeSoulValidation(personaSlug, sessionId) {
+  if (!personaSlug) return true;
+
+  const startTime = Date.now();
+
+  try {
+    const result = await validateSoulCached(personaSlug);
+
+    if (!result.valid) {
+      // Fire-and-forget critical alert
+      alertOnCritical(result).catch(() => {});
+
+      await logOperation('soul_validation_failure', {
+        sessionId,
+        details: {
+          persona: personaSlug,
+          errors: result.errors,
+          hash_match: result.metadata.hashMatch,
+          structure_valid: result.metadata.structureValid
+        },
+        durationMs: Date.now() - startTime,
+        success: false
+      });
+
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    // Validation error should not block invocation
+    await logOperation('error_graceful', {
+      sessionId,
+      details: {
+        error_type: 'soul_validation_error',
+        error_message: error.message,
+        fallback_used: 'proceed_without_validation'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    return true;
+  }
+}
+
+/**
+ * Safely run drift analysis and generate correction for a previous response.
+ * Follows safe-fetch pattern: try/catch, logOperation, return null on failure.
+ *
+ * @param {string} previousResponse - The persona's previous response text
+ * @param {string} personaId - Persona UUID
+ * @param {string} personaSlug - Persona slug (for marker loading)
+ * @param {string} sessionId - Session UUID
+ * @returns {Promise<{correction: string|null, score: number}|null>} Drift result or null
+ */
+async function safeDriftFetch(previousResponse, personaId, personaSlug, sessionId) {
+  const startTime = Date.now();
+
+  try {
+    // Load soul markers (cached after first call, <1ms subsequent)
+    const markers = await loadPersonaMarkers(personaSlug);
+
+    // Run drift analysis (~5-10ms)
+    const analysis = await analyzeDrift(previousResponse, personaId, sessionId);
+
+    // Generate correction based on analysis (<1ms)
+    const correction = await generateDriftCorrection(
+      analysis,
+      personaSlug,
+      markers,
+      sessionId,
+      personaId
+    );
+
+    await logOperation('drift_pipeline', {
+      sessionId,
+      personaId,
+      details: {
+        drift_score: analysis.driftScore,
+        severity: analysis.severity,
+        correction_generated: !!correction
+      },
+      durationMs: Date.now() - startTime,
+      success: true
+    });
+
+    return { correction, score: analysis.driftScore };
+  } catch (error) {
+    await logOperation('error_graceful', {
+      sessionId,
+      personaId,
+      details: {
+        error_type: 'drift_pipeline_failure',
+        error_message: error.message,
+        fallback_used: 'null'
+      },
+      durationMs: Date.now() - startTime,
+      success: false
+    });
+
+    return null;
+  }
+}
+
+/**
  * Get setting context from database or use default.
  *
  * @param {string} sessionId - Session UUID
@@ -891,7 +1038,7 @@ async function getSettingContext(sessionId) {
  * @param {boolean} [params.options.includeSetting=true] - Include bar setting
  * @param {boolean} [params.options.includePynchon=true] - Include Pynchon Stack layers
  * @param {Object} [params.previousResponse] - Previous persona response for drift detection
- * @param {Object} [params.soulMarkers] - Soul voice markers for drift detection
+ * @param {Object} [params.soulMarkers] - Deprecated: markers now loaded internally by drift pipeline
  *
  * @returns {Promise<Object>} AssembledContext object
  *
@@ -922,6 +1069,28 @@ export async function assembleContext(params) {
   const includePynchon = options.includePynchon !== false;
 
   try {
+    // Step 0: Validate soul file integrity (Constitution Principle I)
+    const soulValid = await safeSoulValidation(personaSlug, sessionId);
+    if (!soulValid) {
+      // Soul tampered — return null context with error flag
+      return {
+        systemPrompt: '',
+        components: {
+          memories: null, relationship: null, personaRelations: null,
+          personaMemories: null, driftCorrection: null, setting: null,
+          temporal: null, ambient: null, entropy: null, preterite: null,
+          zoneResistance: null, theyAwareness: null, counterforce: null,
+          narrativeGravity: null, interfaceBleed: null
+        },
+        metadata: {
+          sessionId, totalTokens: 0, truncated: false, memoriesIncluded: 0,
+          driftScore: null, trustLevel: 'stranger',
+          assemblyDurationMs: Date.now() - startTime,
+          pynchonEnabled: false, soulIntegrityFailure: true
+        }
+      };
+    }
+
     // Step 1: Fetch relationship state (with fallback)
     const relationship = await safeRelationshipFetch(personaId, userId, sessionId);
 
@@ -936,12 +1105,12 @@ export async function assembleContext(params) {
     let driftCorrection = null;
     let driftScore = null;
 
-    if (previousResponse && soulMarkers) {
-      // Note: drift-detection.js runs in sandbox, so we'd need to integrate differently
-      // For now, we'll skip actual drift detection and just provide the interface
-      // This would be called via MCP in production
-      driftCorrection = null;
-      driftScore = null;
+    if (previousResponse) {
+      const driftResult = await safeDriftFetch(previousResponse, personaId, personaSlug, sessionId);
+      if (driftResult) {
+        driftCorrection = driftResult.correction;
+        driftScore = driftResult.score;
+      }
     }
 
     // Step 5: Get personalized setting context (replaces static getSettingContext)
@@ -1322,124 +1491,122 @@ export async function completeSession(sessionData) {
       topicDepth: calculateTopicDepth(messages)
     };
 
-    // NOTE: These operations are not wrapped in a single transaction because
-    // each module manages its own connection. This is a design trade-off:
-    // - Pro: Modules remain decoupled and independently testable
-    // - Pro: Partial failures don't block other operations
-    // - Con: If process crashes mid-completion, state may be partially updated
-    // The idempotency check above mitigates the most common issue (duplicate processing).
+    // All session completion operations are wrapped in a transaction.
+    // If any operation fails, the entire session completion rolls back.
+    // The idempotency check above remains as a secondary guard.
+    return await withTransaction(async (client) => {
+      // Update familiarity (may trigger trust level change)
+      const relationshipResult = await updateFamiliarity(userId, personaId, sessionQuality, client);
 
-    // Update familiarity (may trigger trust level change)
-    const relationshipResult = await updateFamiliarity(userId, personaId, sessionQuality);
-
-    // Extract and store memories
-    const memories = await extractSessionMemories({
-      sessionId,
-      userId,
-      personaId,
-      personaName,
-      messages,
-      startedAt,
-      endedAt
-    });
-
-    let memoriesStored = 0;
-    let memoriesConsignedToPreterite = 0;
-
-    if (memories.length > 0) {
-      await storeSessionMemories(userId, personaId, memories);
-      memoriesStored = memories.length;
-
-      // Phase 1 Pynchon: Classify memories for preterite/elect status
-      // Some memories are deemed insignificant and consigned to the preterite
-      try {
-        for (const memory of memories) {
-          const classification = classifyMemoryElection(memory);
-          if (classification.status === 'preterite') {
-            await consignToPreterite(memory, classification.reason);
-            memoriesConsignedToPreterite++;
-          }
-        }
-      } catch (preteriteError) {
-        // Silent fallback - preterite classification is not critical
-        console.error('[ContextAssembler] Preterite classification failed:', preteriteError.message);
-      }
-    }
-
-    // Extract and save setting preferences (005-setting-preservation)
-    const settingResult = await extractAndSaveSettings({
-      sessionId,
-      userId,
-      personaId,
-      personaName,
-      messages,
-      startedAt,
-      endedAt
-    });
-
-    // Phase 1: Update temporal state (Constitution Principle VII)
-    try {
-      await touchTemporalState(personaId, {
-        sessionDuration: endedAt - startedAt,
-        messageCount: messages.length
+      // Extract and store memories
+      const memories = await extractSessionMemories({
+        sessionId,
+        userId,
+        personaId,
+        personaName,
+        messages,
+        startedAt,
+        endedAt
       });
-    } catch (temporalError) {
-      // Silent fallback - temporal tracking is not critical
-      console.error('[ContextAssembler] Temporal state update failed:', temporalError.message);
-    }
 
-    // Phase 1 Pynchon: Increment global entropy
-    // Each session adds to the entropy of the system
-    let entropyResult = null;
-    try {
-      entropyResult = await applySessionEntropy(sessionId);
-    } catch (entropyError) {
-      // Silent fallback - entropy tracking is not critical
-      console.error('[ContextAssembler] Entropy increment failed:', entropyError.message);
-    }
+      let memoriesStored = 0;
+      let memoriesConsignedToPreterite = 0;
 
-    // Phase 2 Pynchon: Update narrative arc at session end
-    // Large negative delta drives momentum below IMPACT_BELOW threshold (0.2)
-    let arcResult = null;
-    try {
-      arcResult = await updateArc(sessionId, -1.0);
-    } catch (arcError) {
-      // Silent fallback - narrative arc tracking is not critical
-      console.error('[ContextAssembler] Narrative arc update failed:', arcError.message);
-    }
+      if (memories.length > 0) {
+        await storeSessionMemories(userId, personaId, memories, client);
+        memoriesStored = memories.length;
 
-    await logOperation('session_complete', {
-      sessionId,
-      personaId,
-      userId,
-      details: {
-        duration_ms: endedAt - startedAt,
-        message_count: messages.length,
-        familiarity_delta: relationshipResult.effectiveDelta,
-        trust_level_changed: relationshipResult.trustLevelChanged,
-        memories_stored: memoriesStored,
-        memories_preterite: memoriesConsignedToPreterite,
-        settings_extracted: settingResult.fieldsUpdated.length > 0,
-        settings_fields: settingResult.fieldsUpdated,
-        entropy_level: entropyResult?.level || null,
-        entropy_state: entropyResult?.state || null,
+        // Phase 1 Pynchon: Classify memories for preterite/elect status
+        // Some memories are deemed insignificant and consigned to the preterite
+        try {
+          for (const memory of memories) {
+            const classification = classifyMemoryElection(memory);
+            if (classification.status === 'preterite') {
+              await consignToPreterite(memory, classification.reason, client);
+              memoriesConsignedToPreterite++;
+            }
+          }
+        } catch (preteriteError) {
+          // Silent fallback - preterite classification is not critical
+          console.error('[ContextAssembler] Preterite classification failed:', preteriteError.message);
+        }
+      }
+
+      // Extract and save setting preferences (005-setting-preservation)
+      const settingResult = await extractAndSaveSettings({
+        sessionId,
+        userId,
+        personaId,
+        personaName,
+        messages,
+        startedAt,
+        endedAt
+      }, client);
+
+      // Phase 1: Update temporal state (Constitution Principle VII)
+      try {
+        await touchTemporalState(personaId, {
+          sessionDuration: endedAt - startedAt,
+          messageCount: messages.length
+        }, client);
+      } catch (temporalError) {
+        // Silent fallback - temporal tracking is not critical
+        console.error('[ContextAssembler] Temporal state update failed:', temporalError.message);
+      }
+
+      // Phase 1 Pynchon: Increment global entropy
+      // Each session adds to the entropy of the system
+      let entropyResult = null;
+      try {
+        entropyResult = await applySessionEntropy(sessionId, client);
+      } catch (entropyError) {
+        // Silent fallback - entropy tracking is not critical
+        console.error('[ContextAssembler] Entropy increment failed:', entropyError.message);
+      }
+
+      // Phase 2 Pynchon: Update narrative arc at session end
+      // Large negative delta drives momentum below IMPACT_BELOW threshold (0.2)
+      let arcResult = null;
+      try {
+        arcResult = await updateArc(sessionId, -1.0, client);
+      } catch (arcError) {
+        // Silent fallback - narrative arc tracking is not critical
+        console.error('[ContextAssembler] Narrative arc update failed:', arcError.message);
+      }
+
+      await logOperation('session_complete', {
+        sessionId,
+        personaId,
+        userId,
+        details: {
+          duration_ms: endedAt - startedAt,
+          message_count: messages.length,
+          familiarity_delta: relationshipResult.effectiveDelta,
+          trust_level_changed: relationshipResult.trustLevelChanged,
+          memories_stored: memoriesStored,
+          memories_preterite: memoriesConsignedToPreterite,
+          settings_extracted: settingResult.fieldsUpdated.length > 0,
+          settings_fields: settingResult.fieldsUpdated,
+          entropy_level: entropyResult?.level || null,
+          entropy_state: entropyResult?.state || null,
+          // Phase 2
+          arc_phase: arcResult?.phase || 'IMPACT'
+        },
+        durationMs: Date.now() - startTime,
+        success: true
+      });
+
+      return {
+        relationship: relationshipResult,
+        memoriesStored,
+        memoriesConsignedToPreterite,
+        settingsExtracted: settingResult.fieldsUpdated,
+        sessionQuality,
+        entropyState: entropyResult?.state || null,
         // Phase 2
-        arc_phase: arcResult?.phase || 'IMPACT'
-      },
-      durationMs: Date.now() - startTime,
-      success: true
+        arcPhase: arcResult?.phase || 'IMPACT'
+      };
     });
-
-    return {
-      relationship: relationshipResult,
-      memoriesStored,
-      memoriesConsignedToPreterite,
-      settingsExtracted: settingResult.fieldsUpdated,
-      sessionQuality,
-      entropyState: entropyResult?.state || null,
-      // Phase 2
-      arcPhase: arcResult?.phase || 'IMPACT'
-    };
 
   } catch (error) {
     await logOperation('error_graceful', {

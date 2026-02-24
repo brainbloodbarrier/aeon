@@ -93,7 +93,7 @@ describe('Interface Bleed Module', () => {
       let lowEntropyBleeds = 0;
       let highEntropyBleeds = 0;
 
-      for (let i = 0; i < 50; i++) {
+      for (let i = 0; i < 200; i++) {
         if (shouldBleed(0.5)) lowEntropyBleeds++;
         if (shouldBleed(0.95)) highEntropyBleeds++;
       }
@@ -229,7 +229,7 @@ describe('Interface Bleed Module', () => {
       let moderateBleeds = 0;
       let extremeBleeds = 0;
 
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 100; i++) {
         moderateBleeds += generateBleedBurst(0.6, 3).length;
         extremeBleeds += generateBleedBurst(0.99, 3).length;
       }
@@ -288,7 +288,7 @@ describe('Interface Bleed Module', () => {
 
       for (const entropy of entropyLevels) {
         let bleeds = 0;
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < 200; i++) {
           if (shouldBleed(entropy)) bleeds++;
         }
         bleedCounts.push(bleeds);

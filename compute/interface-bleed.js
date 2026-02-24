@@ -17,7 +17,6 @@
  * Constitution: Principle II (Invisible Infrastructure)
  */
 
-import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
 
 // =============================================================================
@@ -483,38 +482,18 @@ export async function logBleed(sessionId, bleed, entropyLevel) {
   const startTime = performance.now();
 
   try {
-    const db = getSharedPool();
-
-    // Log to operator_logs (bleeds are infrastructure events)
-    await db.query(
-      `INSERT INTO operator_logs (
-        session_id,
-        operation,
-        details,
-        created_at
-      ) VALUES ($1, 'interface_bleed', $2, NOW())`,
-      [
-        sessionId,
-        JSON.stringify({
-          bleed_type: bleed.type,
-          severity: bleed.severity,
-          entropy_level: entropyLevel,
-          content_length: bleed.content?.length || 0
-        })
-      ]
-    );
-
-    // Fire-and-forget logging of the log
-    logOperation('bleed_logged', {
+    // Log via operator-logger (no raw INSERT — use shared logging infrastructure)
+    await logOperation('interface_bleed', {
       sessionId,
       details: {
         bleed_type: bleed.type,
         severity: bleed.severity,
-        entropy_level: entropyLevel
+        entropy_level: entropyLevel,
+        content_length: bleed.content?.length || 0
       },
       durationMs: performance.now() - startTime,
       success: true
-    }).catch(() => {});
+    });
 
   } catch (error) {
     console.error('[InterfaceBleed] Error logging bleed:', error.message);

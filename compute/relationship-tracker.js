@@ -254,6 +254,7 @@ export async function ensureRelationship(userId, personaId) {
     // Return default on failure (invisible infrastructure)
     return {
       id: null,
+      _fallback: true,
       personaId,
       userId,
       familiarityScore: 0,
@@ -275,11 +276,11 @@ export async function ensureRelationship(userId, personaId) {
  * @param {Object} sessionQuality - Session quality metrics
  * @returns {Promise<Object>} Update result with delta and trust changes
  */
-export async function updateFamiliarity(userId, personaId, sessionQuality) {
+export async function updateFamiliarity(userId, personaId, sessionQuality, client = null) {
   const startTime = performance.now();
 
   try {
-    const db = getPool();
+    const db = client || getPool();
 
     // Get current state
     const current = await ensureRelationship(userId, personaId);
@@ -406,9 +407,21 @@ export async function updateUserSummary(userId, personaId, summary) {
       success: true
     }).catch(() => {});
 
+    return { success: true };
+
   } catch (error) {
     console.error('[RelationshipTracker] Error updating user summary:', error.message);
-    // Fire-and-forget: silently ignore errors
+    logOperation('error_graceful', {
+      personaId,
+      userId,
+      details: {
+        error_type: 'user_summary_update_failure',
+        error_message: error.message
+      },
+      durationMs: performance.now() - startTime,
+      success: false
+    }).catch(() => {});
+    return { success: false };
   }
 }
 
@@ -444,9 +457,21 @@ export async function updateUserPreferences(userId, personaId, patterns) {
       success: true
     }).catch(() => {});
 
+    return { success: true };
+
   } catch (error) {
     console.error('[RelationshipTracker] Error updating user preferences:', error.message);
-    // Fire-and-forget: silently ignore errors
+    logOperation('error_graceful', {
+      personaId,
+      userId,
+      details: {
+        error_type: 'user_preferences_update_failure',
+        error_message: error.message
+      },
+      durationMs: performance.now() - startTime,
+      success: false
+    }).catch(() => {});
+    return { success: false };
   }
 }
 

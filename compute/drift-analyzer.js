@@ -79,8 +79,16 @@ export async function shouldAnalyzeDrift(personaId) {
     // Default if persona not found
     return { enabled: true, threshold: 0.3 };
   } catch (error) {
-    console.error('[DriftAnalyzer] Error checking drift config:', error.message);
-    // Default to enabled on error
+    console.error('[DriftAnalyzer] Error checking drift config, using defaults:', error.message);
+    logOperation('error_graceful', {
+      personaId,
+      details: {
+        error_type: 'drift_config_fetch_failure',
+        error_message: error.message,
+        fallback_used: 'enabled=true, threshold=0.3'
+      },
+      success: false
+    }).catch(() => {});
     return { enabled: true, threshold: 0.3 };
   }
 }
@@ -186,8 +194,8 @@ function detectDrift(text, markers) {
             result.patternViolations.push(pattern.name);
             result.scores.patterns += 0.1;
           }
-        } catch {
-          // Invalid regex, skip
+        } catch (error) {
+          console.warn(`[DriftAnalyzer] Invalid regex pattern "${pattern.name}": ${error.message}`);
         }
       }
     }
@@ -313,8 +321,8 @@ export async function analyzeDrift(response, personaId, sessionId = null) {
   // Create drift alert if severity >= WARNING
   // ─────────────────────────────────────────────────────────────────────────
   if (analysis.severity === 'WARNING' || analysis.severity === 'CRITICAL') {
-    createDriftAlert(personaId, analysis.driftScore).catch(() => {
-      // Fire-and-forget: silently ignore alert errors
+    createDriftAlert(personaId, analysis.driftScore).catch((error) => {
+      console.error('[DriftAnalyzer] Failed to create drift alert:', error.message);
     });
   }
 

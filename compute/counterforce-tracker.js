@@ -647,8 +647,12 @@ export async function adjustAlignment(personaId, delta, reason) {
       success: false
     }).catch(() => {});
 
-    // Return current alignment without changes
-    return getPersonaAlignment(personaId);
+    // Return default neutral alignment directly (avoid calling DB again when DB is failing)
+    return {
+      alignmentScore: 0,
+      alignmentType: ALIGNMENTS.NEUTRAL,
+      resistanceStyle: null
+    };
   }
 }
 

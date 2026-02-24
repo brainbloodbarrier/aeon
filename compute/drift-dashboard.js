@@ -296,7 +296,8 @@ async function calculateTrendDirection(personaUuid, hours) {
       return 'worsening';
     }
     return 'stable';
-  } catch {
+  } catch (error) {
+    console.error('[DriftDashboard] Error calculating trend direction:', error.message);
     return 'stable';
   }
 }

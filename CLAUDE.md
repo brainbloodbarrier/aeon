@@ -35,6 +35,9 @@ npm run test:integration
 # Run a single test file
 node --experimental-vm-modules node_modules/jest/bin/jest.js tests/unit/drift-analyzer.test.js
 
+# Regenerate soul hashes after editing persona files
+npm run init-hashes   # or: node scripts/init-soul-hashes.js
+
 # Purge stale settings (>90 days inactive)
 node scripts/purge-settings.js
 ```
@@ -59,6 +62,8 @@ docker compose down
 **Required env var:** `DB_PASSWORD`. Optional: `NEO4J_PASSWORD`, `OPENAI_API_KEY`.
 
 **Database:** `aeon_matrix` on PostgreSQL 16 with pgvector. User: `architect`. Port: `5432`.
+
+**Runtime:** Node.js >= 18 (ES Modules project, `"type": "module"`).
 
 ---
 
@@ -169,16 +174,9 @@ When you arrive with a question, the right ones turn to look.
 
 ### Constitution Principles
 
-**I — Soul Layer:** Personas in `/personas/*.md` are immutable at runtime (Docker mounts read-only). SHA-256 hashes enforce integrity via `soul-validator.js`.
+**I — Soul Layer:** Personas in `/personas/*.md` are immutable at runtime (Docker mounts read-only). SHA-256 hashes enforce integrity via `soul-validator.js`. Any edit to persona files requires running `npm run init-hashes` and committing the updated `personas/.soul-hashes.json`.
 
 **II — Invisible Infrastructure:** All system operations are invisible to personas and users. When a persona is invoked, `compute/context-assembler.js` silently injects: setting context, relationship behavioral hints (trust-based), framed memories, and drift corrections — within a 3000-token budget.
-
-Key compute modules:
-- `context-assembler.js` — Orchestrates context injection
-- `memory-framing.js` — Natural language memory formatting
-- `relationship-shaper.js` — Trust-based behavior shaping
-- `drift-correction.js` — Voice fidelity reinforcement
-- `operator-logger.js` — Silent operation logging (never exposed to users)
 
 **III — Voice Fidelity:** Real-time drift detection via `drift-analyzer.js` (< 100ms). Severity: STABLE (≤0.1) / MINOR (0.1-0.3) / WARNING (0.3-0.5) / CRITICAL (>0.5). Universal forbidden phrases: generic AI self-reference, helpfulness filler, hedging/disclaimers.
 
@@ -186,21 +184,26 @@ Key compute modules:
 
 **V — Setting Preservation:** `setting-preserver.js` + `setting-extractor.js` maintain personalized atmosphere per user/persona pair. Settings expire after 90 days of inactivity.
 
+### Context Assembly Pipeline
+
+When a persona is invoked, `context-assembler.js` orchestrates a pipeline with token-budgeted components:
+
+1. **Soul markers** (500 tokens) — Voice identity anchors from persona files
+2. **Relationship hints** (200) — Behavioral modifiers based on user trust level
+3. **Memories** (800) — Framed past interactions, ranked by importance
+4. **Drift corrections** (100) — Voice fidelity reinforcements
+5. **Setting** (100) — Bar atmosphere context
+6. **Temporal/Pynchon layers** (~675) — Non-linear time, entropy, preterite memory, zone boundaries, narrative gravity, interface bleed, paranoid undertones
+
+Each `safe*Fetch` helper catches errors and returns `null` — a failing subsystem must never break context assembly.
+
 ### Pynchon Stack
 
-Additional compute modules implementing paranoid realism:
+Additional compute modules implementing paranoid realism in two phases:
 
-**Phase 1** (Temporal Consciousness):
-- `temporal-awareness.js` — Non-linear time perception
-- `entropy-tracker.js` + `ambient-generator.js` — System entropy and atmosphere
-- `zone-boundary-detector.js` — Boundary crossing detection
-- `preterite-memory.js` — Forgotten/overlooked history retrieval
+**Phase 1** (Temporal Consciousness): `temporal-awareness.js`, `entropy-tracker.js`, `ambient-generator.js`, `zone-boundary-detector.js`, `preterite-memory.js`
 
-**Phase 2** (They Awareness):
-- `they-awareness.js` — Systemic surveillance patterns
-- `counterforce-tracker.js` — Resistance and counter-narrative
-- `narrative-gravity.js` — Story momentum and inevitability
-- `interface-bleed.js` — Reality/fiction boundary erosion
+**Phase 2** (They Awareness): `they-awareness.js`, `counterforce-tracker.js`, `narrative-gravity.js`, `interface-bleed.js`
 
 ### Database Schema
 
@@ -214,17 +217,51 @@ MCP servers run outside Docker, configured in Claude Desktop (`~/Library/Applica
 - `aeon-db` → `mcp-db-server` with `DATABASE_URL`
 - `aeon-compute` → `node-code-sandbox-mcp`
 
-### Testing
+---
+
+## Coding Rules
+
+### Security
+
+- **Validate persona names against directory traversal**: Any function receiving a persona name to construct a file path must sanitize input. Strip or reject `..`, `/`, `\`, and null bytes. Validate the resolved path stays within `PERSONAS_DIR` using `path.resolve()` + `startsWith()`.
+- **Never expose `operator_logs` content to users**: Constitution Principle II mandates invisible infrastructure. Operator logs are exclusively for system diagnostics.
+- **Use parameterized SQL** (`$1`, `$2` for pg) for all database operations. Never use string interpolation or template literals to build SQL with variables.
+- **Load credentials from environment variables**, never hard-code.
+
+### Correctness
+
+- **Match SQL function signatures to JS callers**: Mismatches cause silent runtime failures caught by catch blocks.
+- **Check return shape before accessing properties**: Never check for nonexistent properties — `undefined` is falsy and silently disables code paths.
+- **Use lowercase constants for `ARC_PHASES`**: All phase values must use lowercase (`'rising'`, `'apex'`, `'falling'`, `'impact'`) matching the constants in `narrative-gravity.js`.
+
+### Architecture
+
+- **All compute modules must use `getSharedPool()` from `db-pool.js`**: No compute module may import `pg` directly or create its own Pool instance.
+- **Soul file modifications require hash regeneration**: Run `npm run init-hashes` and commit the updated `personas/.soul-hashes.json`.
+- **Context assembly helpers must fail silently with `null`**: All `safe*Fetch` functions in `context-assembler.js` must catch errors and return `null`.
+
+---
+
+## Testing
 
 Uses Jest 29 with `--experimental-vm-modules` (ES Modules project). Unit tests mock `db-pool.js` (shared pool). Integration tests in `tests/integration/` require a live database.
 
-**ESM mocking pattern** (gotcha — standard `jest.mock` doesn't work with ES Modules):
+**ESM mocking pattern** (standard `jest.mock` doesn't work with ES Modules):
 ```javascript
 import { jest } from '@jest/globals';
 const mockQuery = jest.fn();
 jest.unstable_mockModule('../../compute/db-pool.js', () => ({
   getSharedPool: jest.fn(() => ({ query: mockQuery, end: jest.fn() }))
 }));
+// Also mock operator-logger to prevent transitive DB access
+jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
+  logOperation: jest.fn()
+}));
 // Import module AFTER mock setup
 const { myFunction } = await import('../../compute/my-module.js');
 ```
+
+**Rules:**
+- All `jest.unstable_mockModule()` calls must appear before any `await import()` of the module under test.
+- Always mock `operator-logger.js` in compute unit tests to prevent transitive database access.
+- Never use bare `return` to skip tests; use `test.skip()` or `describe.skip()`.

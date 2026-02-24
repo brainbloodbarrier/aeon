@@ -245,14 +245,14 @@ describe('Soul Marker Extractor', () => {
       expect(lower.vocabulary.length).toBe(upper.vocabulary.length);
     });
 
-    it('caches default markers for unknown personas too', async () => {
+    it('does not cache default markers for unknown personas (allows retry)', async () => {
       await loadPersonaMarkers('ghost');
       const readdirCount = mockReaddir.mock.calls.length;
 
       await loadPersonaMarkers('ghost');
 
-      // Should not re-scan directories for the same unknown persona
-      expect(mockReaddir.mock.calls.length).toBe(readdirCount);
+      // Should re-scan directories because failure states are not cached
+      expect(mockReaddir.mock.calls.length).toBeGreaterThan(readdirCount);
     });
   });
 });

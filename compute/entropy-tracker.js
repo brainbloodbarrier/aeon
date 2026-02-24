@@ -319,8 +319,13 @@ export async function incrementEntropy(delta = ENTROPY_CONFIG.baseSessionDelta, 
       success: false
     }).catch(() => {});
 
-    // Return current state on failure
-    return await getEntropyState();
+    // Return defaults directly (avoid calling DB again when DB is failing)
+    return {
+      level: ENTROPY_CONFIG.defaultLevel,
+      state: ENTROPY_STATES.STABLE,
+      markers: ENTROPY_MARKERS.stable,
+      lastUpdated: new Date()
+    };
   }
 }
 
@@ -398,8 +403,13 @@ export async function resetEntropy(newLevel = ENTROPY_CONFIG.minEntropy, reason 
       success: false
     }).catch(() => {});
 
-    // Return current state on failure
-    return await getEntropyState();
+    // Return defaults directly (avoid calling DB again when DB is failing)
+    return {
+      level: ENTROPY_CONFIG.defaultLevel,
+      state: ENTROPY_STATES.STABLE,
+      markers: ENTROPY_MARKERS.stable,
+      lastUpdated: new Date()
+    };
   }
 }
 
@@ -464,7 +474,7 @@ export function getRandomMarker(level) {
  * @property {string|null} effect - Current effect (null if stable)
  * @property {boolean} shouldIncrement - Whether session should increment entropy
  */
-export async function applySessionEntropy(sessionId) {
+export async function applySessionEntropy(sessionId, client = null) {
   const startTime = performance.now();
 
   try {

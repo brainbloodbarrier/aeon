@@ -212,21 +212,21 @@ export function calculateImportance(patterns, sessionData) {
  *
  * @param {string} content - Memory content
  * @param {string[]} patterns - Detected patterns
- * @returns {'episodic' | 'semantic' | 'procedural'} Memory type
+ * @returns {'interaction' | 'learning' | 'insight'} Memory type (DB-compatible)
  */
 export function classifyMemoryType(content, patterns) {
-  // Procedural: How to interact (preferences, style)
+  // Insight: How to interact (preferences, style)
   if (patterns.includes('preference')) {
-    return 'procedural';
+    return 'insight';
   }
 
-  // Semantic: General knowledge about user (facts)
+  // Learning: General knowledge about user (facts)
   if (patterns.includes('fact')) {
-    return 'semantic';
+    return 'learning';
   }
 
-  // Default: Episodic (specific exchange)
-  return 'episodic';
+  // Default: Interaction (specific exchange)
+  return 'interaction';
 }
 
 /**
@@ -367,6 +367,35 @@ export async function extractSessionMemories(sessionData) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Embedding Generation
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Generate an embedding vector for text content.
+ * Gracefully returns null when OPENAI_API_KEY is absent.
+ *
+ * @param {string} text - Text to embed (truncated to 8000 chars)
+ * @returns {Promise<number[]|null>} 1536-dimension embedding vector, or null
+ */
+export async function generateEmbedding(text) {
+  if (!process.env.OPENAI_API_KEY) return null;
+  if (!text || text.length < 10) return null;
+
+  try {
+    const { default: OpenAI } = await import('openai');
+    const client = new OpenAI();
+    const response = await client.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: text.slice(0, 8000)
+    });
+    return response.data[0].embedding;
+  } catch (error) {
+    console.error('[MemoryExtractor] Embedding generation failed:', error.message);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Memory Storage
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -384,12 +413,25 @@ export async function storeMemory(userId, personaId, memory) {
   try {
     const db = getPool();
 
-    const result = await db.query(
-      `INSERT INTO memories (user_id, persona_id, content, memory_type, importance)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id`,
-      [userId, personaId, memory.content, memory.memoryType, memory.importance]
-    );
+    // Generate embedding if API key available (graceful degradation)
+    const embedding = await generateEmbedding(memory.content);
+
+    let result;
+    if (embedding) {
+      result = await db.query(
+        `INSERT INTO memories (user_id, persona_id, content, memory_type, importance, embedding)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id`,
+        [userId, personaId, memory.content, memory.memoryType, memory.importance, JSON.stringify(embedding)]
+      );
+    } else {
+      result = await db.query(
+        `INSERT INTO memories (user_id, persona_id, content, memory_type, importance)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id`,
+        [userId, personaId, memory.content, memory.memoryType, memory.importance]
+      );
+    }
 
     const memoryId = result.rows[0].id;
 
@@ -411,6 +453,16 @@ export async function storeMemory(userId, personaId, memory) {
 
   } catch (error) {
     console.error('[MemoryExtractor] Error storing memory:', error.message);
+    logOperation('error_graceful', {
+      personaId,
+      userId,
+      details: {
+        error_type: 'memory_store_failure',
+        error_message: error.message
+      },
+      durationMs: performance.now() - startTime,
+      success: false
+    }).catch(() => {});
     return null;
   }
 }
@@ -423,7 +475,7 @@ export async function storeMemory(userId, personaId, memory) {
  * @param {Array<Object>} memories - Memories to store
  * @returns {Promise<string[]>} Memory IDs
  */
-export async function storeSessionMemories(userId, personaId, memories) {
+export async function storeSessionMemories(userId, personaId, memories, client = null) {
   const startTime = performance.now();
 
   if (!memories || memories.length === 0) {
@@ -439,7 +491,7 @@ export async function storeSessionMemories(userId, personaId, memories) {
   }
 
   try {
-    const db = getPool();
+    const db = client || getPool();
     const ids = [];
 
     // Build batch insert
@@ -476,6 +528,16 @@ export async function storeSessionMemories(userId, personaId, memories) {
 
   } catch (error) {
     console.error('[MemoryExtractor] Error storing memories:', error.message);
+    logOperation('error_graceful', {
+      personaId,
+      userId,
+      details: {
+        error_type: 'memory_store_failure',
+        error_message: error.message
+      },
+      durationMs: performance.now() - startTime,
+      success: false
+    }).catch(() => {});
     return [];
   }
 }

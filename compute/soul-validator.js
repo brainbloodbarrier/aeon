@@ -262,16 +262,20 @@ export async function alertOnCritical(result) {
     console.error(`  Errors: ${result.errors.join(', ')}`);
 
     // Log to database
-    await logModificationAttempt(
-      result.personaName,
-      'hash_mismatch',
-      `personas/${result.personaName}.md`,
-      {
-        storedHash: result.metadata.storedHash,
-        currentHash: result.metadata.currentHash,
-        errors: result.errors
-      }
-    );
+    try {
+      await logModificationAttempt(
+        result.personaName,
+        'hash_mismatch',
+        `personas/${result.personaName}.md`,
+        {
+          storedHash: result.metadata.storedHash,
+          currentHash: result.metadata.currentHash,
+          errors: result.errors
+        }
+      );
+    } catch (dbError) {
+      console.error(`[CRITICAL] Failed to log soul integrity violation to database: ${dbError.message}`);
+    }
   }
 }
 
@@ -292,6 +296,38 @@ export async function validateSoulOrThrow(personaName) {
   }
 
   return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Cached Validation (for invocation pipeline)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** @type {Map<string, {result: Object, timestamp: number}>} */
+const validationCache = new Map();
+const CACHE_TTL_MS = 60_000; // Re-validate every 60 seconds
+
+/**
+ * Validate a persona's soul file with caching.
+ * Returns cached result if within TTL, otherwise re-validates.
+ *
+ * @param {string} personaName - Name of the persona
+ * @returns {Promise<ValidationResult>} Validation result
+ */
+export async function validateSoulCached(personaName) {
+  const cached = validationCache.get(personaName);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+    return cached.result;
+  }
+  const result = await validateSoul(personaName);
+  validationCache.set(personaName, { result, timestamp: Date.now() });
+  return result;
+}
+
+/**
+ * Clear the validation cache. Useful for testing.
+ */
+export function clearValidationCache() {
+  validationCache.clear();
 }
 
 /**
