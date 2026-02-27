@@ -5,54 +5,49 @@
  * Feature: 005-setting-preservation
  *
  * These tests require a running PostgreSQL database with migrations applied.
- * Skip in CI unless database is available.
+ * Run with: npm run test:integration
  */
 
 import pg from 'pg';
 
 const { Pool } = pg;
 
-// Database connection for test setup/teardown
+const DATABASE_URL = process.env.DATABASE_URL;
+const dbAvailable = !!DATABASE_URL;
+
 let pool;
 let testUserId;
 let testPersonaId;
 
-// Database URL
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  console.warn('[Integration] DATABASE_URL not set, integration tests will be skipped');
-}
-
-// Check database connection before tests
-let dbAvailable = false;
+const describeIfDb = dbAvailable ? describe : describe.skip;
 
 beforeAll(async () => {
+  if (!dbAvailable) return;
   try {
     pool = new Pool({ connectionString: DATABASE_URL, max: 5 });
     await pool.query('SELECT 1');
-    dbAvailable = true;
 
-    // Create test user
+    // Create test user (uses only columns from 001_schema.sql)
     const userResult = await pool.query(
-      `INSERT INTO users (identifier, platform)
-       VALUES ($1, 'test')
-       ON CONFLICT (identifier) DO UPDATE SET updated_at = NOW()
+      `INSERT INTO users (identifier)
+       VALUES ($1)
+       ON CONFLICT (identifier) DO UPDATE SET interaction_patterns = users.interaction_patterns
        RETURNING id`,
       [`test-user-${Date.now()}`]
     );
     testUserId = userResult.rows[0].id;
 
-    // Get or create test persona
+    // Get existing persona (seed data uses lowercase names)
     const personaResult = await pool.query(
-      `SELECT id FROM personas WHERE name = 'Hegel' LIMIT 1`
+      `SELECT id FROM personas WHERE name = $1 LIMIT 1`,
+      ['hegel']
     );
     if (personaResult.rows.length > 0) {
       testPersonaId = personaResult.rows[0].id;
     } else {
-      // Create a test persona if none exists
       const newPersona = await pool.query(
-        `INSERT INTO personas (name, soul_hash, status)
-         VALUES ('TestPersona', 'test-hash', 'active')
+        `INSERT INTO personas (name, category, soul_path, skill_path)
+         VALUES ('test_persona', 'test', 'test/test.md', 'test.md')
          RETURNING id`
       );
       testPersonaId = newPersona.rows[0].id;
@@ -62,18 +57,17 @@ beforeAll(async () => {
     await pool.query(
       `INSERT INTO relationships (user_id, persona_id, trust_level, familiarity_score)
        VALUES ($1, $2, 'stranger', 0)
-       ON CONFLICT (user_id, persona_id) DO NOTHING`,
+       ON CONFLICT (persona_id, user_id) DO NOTHING`,
       [testUserId, testPersonaId]
     );
   } catch (e) {
-    dbAvailable = false;
-    console.log('Database not available, skipping integration tests:', e.message);
+    console.error('Database setup failed:', e.message);
+    throw e;
   }
 });
 
 afterAll(async () => {
-  if (pool && dbAvailable) {
-    // Cleanup test data
+  if (pool) {
     if (testUserId) {
       await pool.query('DELETE FROM user_settings WHERE user_id = $1', [testUserId]);
       await pool.query('DELETE FROM relationships WHERE user_id = $1', [testUserId]);
@@ -84,10 +78,8 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  if (!dbAvailable) return;
-  // Clear settings before each test
+  if (!pool) return;
   await pool.query('DELETE FROM user_settings WHERE user_id = $1', [testUserId]);
-  // Reset persona location
   await pool.query(
     `UPDATE relationships
      SET preferred_location = NULL, location_context = NULL
@@ -96,11 +88,10 @@ beforeEach(async () => {
   );
 });
 
-describe('Setting Preservation Integration', () => {
+describeIfDb('Setting Preservation Integration', () => {
 
   describe('User Story 1: Returning to a Familiar Bar', () => {
     test('returns default setting for new user without preferences', async () => {
-      if (!dbAvailable) return;
       const { compileUserSetting } = await import('../../compute/setting-preserver.js');
 
       const setting = await compileUserSetting(testUserId, testPersonaId, 'test-session-1');
@@ -110,16 +101,13 @@ describe('Setting Preservation Integration', () => {
     });
 
     test('returns personalized setting after preferences are saved', async () => {
-      if (!dbAvailable) return;
       const { saveUserSettings, compileUserSetting } = await import('../../compute/setting-preserver.js');
 
-      // Save preferences
       await saveUserSettings(testUserId, {
         musicPreference: 'Fado',
         atmosphereDescriptors: { humidity: 'less' }
       });
 
-      // Compile setting
       const setting = await compileUserSetting(testUserId, testPersonaId, 'test-session-2');
 
       expect(setting).toContain('Fado');
@@ -127,7 +115,6 @@ describe('Setting Preservation Integration', () => {
     });
 
     test('persists settings across multiple compileUserSetting calls', async () => {
-      if (!dbAvailable) return;
       const { saveUserSettings, compileUserSetting } = await import('../../compute/setting-preserver.js');
 
       await saveUserSettings(testUserId, { timeOfDay: 'dawn' });
@@ -142,7 +129,6 @@ describe('Setting Preservation Integration', () => {
 
   describe('User Story 2: Atmosphere Customization', () => {
     test('extracts music preference from conversation', async () => {
-      if (!dbAvailable) return;
       const { extractSettingPreferences } = await import('../../compute/setting-extractor.js');
 
       const messages = [
@@ -155,7 +141,6 @@ describe('Setting Preservation Integration', () => {
     });
 
     test('extracts and saves settings at session end', async () => {
-      if (!dbAvailable) return;
       const { extractAndSaveSettings } = await import('../../compute/setting-extractor.js');
       const { loadUserSettings } = await import('../../compute/setting-preserver.js');
 
@@ -174,13 +159,11 @@ describe('Setting Preservation Integration', () => {
       expect(result.saved.userSettings).toBe(true);
       expect(result.fieldsUpdated.length).toBeGreaterThan(0);
 
-      // Verify settings persisted
       const settings = await loadUserSettings(testUserId);
       expect(settings.musicPreference).toBe('Fado');
     });
 
     test('skips saving when confidence is too low', async () => {
-      if (!dbAvailable) return;
       const { extractAndSaveSettings } = await import('../../compute/setting-extractor.js');
 
       const result = await extractAndSaveSettings({
@@ -202,7 +185,6 @@ describe('Setting Preservation Integration', () => {
 
   describe('User Story 3: Persona-Specific Environments', () => {
     test('saves persona location from conversation', async () => {
-      if (!dbAvailable) return;
       const { savePersonaLocation, loadPersonaLocation } = await import('../../compute/setting-preserver.js');
 
       await savePersonaLocation(testUserId, testPersonaId, {
@@ -217,7 +199,6 @@ describe('Setting Preservation Integration', () => {
     });
 
     test('includes persona location in compiled setting', async () => {
-      if (!dbAvailable) return;
       const { savePersonaLocation, compileUserSetting } = await import('../../compute/setting-preserver.js');
 
       await savePersonaLocation(testUserId, testPersonaId, {
@@ -232,7 +213,6 @@ describe('Setting Preservation Integration', () => {
 
   describe('User Story 4: System Configuration', () => {
     test('saves and retrieves system config', async () => {
-      if (!dbAvailable) return;
       const { saveUserSettings, getSystemConfig } = await import('../../compute/setting-preserver.js');
 
       await saveUserSettings(testUserId, {
@@ -249,26 +229,22 @@ describe('Setting Preservation Integration', () => {
     });
 
     test('respects custom token budget in compilation', async () => {
-      if (!dbAvailable) return;
       const { saveUserSettings, compileUserSetting } = await import('../../compute/setting-preserver.js');
 
-      // Save a very long custom text that would exceed normal budget
-      const longText = 'A '.repeat(500); // ~1000 chars
+      const longText = 'A '.repeat(500);
       await saveUserSettings(testUserId, {
         customSettingText: longText,
-        systemConfig: { token_budget: 100 } // Very restrictive
+        systemConfig: { token_budget: 100 }
       });
 
       const setting = await compileUserSetting(testUserId, testPersonaId, 'test-budget');
 
-      // Should be truncated to ~400 chars (100 tokens * 4)
       expect(setting.length).toBeLessThan(500);
     });
   });
 
   describe('Full Context Assembly Integration', () => {
     test('includes personalized setting in assembled context', async () => {
-      if (!dbAvailable) return;
       const { saveUserSettings } = await import('../../compute/setting-preserver.js');
       const { assembleContext } = await import('../../compute/context-assembler.js');
 
@@ -289,7 +265,6 @@ describe('Setting Preservation Integration', () => {
     });
 
     test('extracts settings during session completion', async () => {
-      if (!dbAvailable) return;
       const { completeSession } = await import('../../compute/context-assembler.js');
       const { loadUserSettings } = await import('../../compute/setting-preserver.js');
 
@@ -306,10 +281,8 @@ describe('Setting Preservation Integration', () => {
         endedAt: Date.now()
       });
 
-      // Check extraction happened
       expect(result.settingsExtracted).toBeDefined();
 
-      // Verify in database
       const settings = await loadUserSettings(testUserId);
       expect(settings.musicPreference).toBe('Jazz');
     });
@@ -317,22 +290,18 @@ describe('Setting Preservation Integration', () => {
 
   describe('Data Retention', () => {
     test('updates timestamp on settings touch', async () => {
-      if (!dbAvailable) return;
       const { saveUserSettings, touchUserSettings } = await import('../../compute/setting-preserver.js');
 
       await saveUserSettings(testUserId, { musicPreference: 'Fado' });
 
-      // Get initial timestamp
       const before = await pool.query(
         'SELECT updated_at FROM user_settings WHERE user_id = $1',
         [testUserId]
       );
 
-      // Wait a moment and touch
       await new Promise(resolve => setTimeout(resolve, 100));
       await touchUserSettings(testUserId);
 
-      // Check timestamp updated
       const after = await pool.query(
         'SELECT updated_at FROM user_settings WHERE user_id = $1',
         [testUserId]
@@ -343,9 +312,4 @@ describe('Setting Preservation Integration', () => {
       );
     });
   });
-});
-
-// Placeholder test to prevent Jest from failing if DB unavailable
-test('placeholder for skipped tests', () => {
-  expect(true).toBe(true);
 });
