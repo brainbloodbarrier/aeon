@@ -11,6 +11,7 @@
 import { getSharedPool } from './db-pool.js';
 import { loadPersonaMarkers, getUniversalForbiddenPhrases } from './soul-marker-extractor.js';
 import { logOperation } from './operator-logger.js';
+import { validatePersonaName } from './persona-validator.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Database Connection
@@ -226,6 +227,7 @@ function detectDrift(text, markers) {
  * @returns {Promise<Object>} DriftAnalysis result
  */
 export async function analyzeDrift(response, personaId, sessionId = null) {
+  validatePersonaName(personaId);
   const startTime = performance.now();
 
   // Initialize result structure

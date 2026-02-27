@@ -12,6 +12,7 @@ import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { getSharedPool } from './db-pool.js';
+import { validatePersonaName } from './persona-validator.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -138,6 +139,7 @@ function getSoulFilePath(soulPath) {
  * @returns {Promise<ValidationResult>} Validation result
  */
 export async function validateSoul(personaName) {
+  validatePersonaName(personaName);
   const errors = [];
   const warnings = [];
   const metadata = {

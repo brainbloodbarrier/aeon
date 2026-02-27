@@ -13,6 +13,7 @@
 import { readFile, readdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { validatePersonaName } from './persona-validator.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Path Resolution
@@ -76,6 +77,7 @@ export function getUniversalForbiddenPhrases() {
  * @returns {Promise<string|null>} Full path to the persona file, or null
  */
 async function findPersonaFile(personaName) {
+  validatePersonaName(personaName);
   const normalizedName = personaName.toLowerCase().trim();
 
   try {
@@ -272,6 +274,7 @@ const DEFAULT_MARKERS = {
  * @returns {Promise<Object>} Markers object: { vocabulary, toneMarkers, patterns, forbidden }
  */
 export async function loadPersonaMarkers(personaName) {
+  validatePersonaName(personaName);
   const cacheKey = personaName.toLowerCase().trim();
 
   // Return cached markers if available

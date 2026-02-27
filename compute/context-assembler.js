@@ -37,6 +37,7 @@ import { processTheyAwareness, frameTheyContext } from './they-awareness.js';
 import { getPersonaAlignment, generateCounterforceHints, frameCounterforceContext } from './counterforce-tracker.js';
 import { getSessionArc, updateArc, analyzeMomentum, getPhaseEffects, generateArcContext, frameArcContext } from './narrative-gravity.js';
 import { processInterfaceBleed, frameBleedContext } from './interface-bleed.js';
+import { validatePersonaName } from './persona-validator.js';
 
 /**
  * Get database connection pool.
@@ -1068,6 +1069,11 @@ export async function assembleContext(params) {
   const includeSetting = options.includeSetting !== false;
   const includePynchon = options.includePynchon !== false;
 
+  // Validate persona name if provided (security: directory traversal prevention)
+  if (personaSlug) {
+    validatePersonaName(personaSlug);
+  }
+
   try {
     // Step 0: Validate soul file integrity (Constitution Principle I)
     const soulValid = await safeSoulValidation(personaSlug, sessionId);
@@ -1469,6 +1475,11 @@ export async function completeSession(sessionData) {
   const startTime = Date.now();
   const { sessionId, userId, personaId, personaName, messages, startedAt, endedAt } = sessionData;
 
+  // Validate persona name if provided (security: directory traversal prevention)
+  if (personaName) {
+    validatePersonaName(personaName);
+  }
+
   try {
     // Idempotency check: verify session hasn't already been completed
     // This prevents duplicate processing if completeSession is called multiple times
@@ -1767,6 +1778,11 @@ export async function assembleCouncilContext(params) {
   } = params;
 
   const includePynchon = options.includePynchon !== false;
+
+  // Validate persona slug if provided (security: directory traversal prevention)
+  if (personaSlug) {
+    validatePersonaName(personaSlug);
+  }
 
   try {
     // Step 1: Get persona's relationships with other council participants
