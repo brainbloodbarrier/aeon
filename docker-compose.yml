@@ -33,6 +33,11 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
 
   # ═══════════════════════════════════════════════════════════════
   # RELATIONSHIP GRAPH - Neo4j (optional)
@@ -63,6 +68,11 @@ services:
     profiles:
       - graph
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
 
   # ═══════════════════════════════════════════════════════════════
   # COMPUTE LAYER - Node.js sandbox for persona operations
@@ -86,6 +96,17 @@ services:
         condition: service_healthy
     profiles:
       - compute
+    healthcheck:
+      test: ["CMD-SHELL", "node -e 'process.exit(0)'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
     command: ["tail", "-f", "/dev/null"]  # Keep container running for MCP access
 
   # ═══════════════════════════════════════════════════════════════
