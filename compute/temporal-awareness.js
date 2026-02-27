@@ -11,34 +11,13 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import { TIME_THRESHOLDS, GAP_LEVELS } from './constants.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Constants
+// Re-export constants for backward compatibility
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Time gap thresholds in milliseconds.
- * Used to classify absence duration for appropriate reflection.
- */
-export const TIME_THRESHOLDS = {
-  BRIEF_ABSENCE: 30 * 60 * 1000,           // 30 minutes
-  NOTABLE_GAP: 2 * 60 * 60 * 1000,         // 2 hours
-  SIGNIFICANT_GAP: 8 * 60 * 60 * 1000,     // 8 hours
-  MAJOR_GAP: 24 * 60 * 60 * 1000,          // 24 hours (1 day)
-  EXTENDED_ABSENCE: 7 * 24 * 60 * 60 * 1000 // 7 days
-};
-
-/**
- * Gap level classifications.
- */
-export const GAP_LEVELS = {
-  NONE: 'none',
-  BRIEF: 'brief',
-  NOTABLE: 'notable',
-  SIGNIFICANT: 'significant',
-  MAJOR: 'major',
-  EXTENDED: 'extended'
-};
+export { TIME_THRESHOLDS, GAP_LEVELS };
 
 /**
  * Default reflection templates by gap level.

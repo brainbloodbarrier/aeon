@@ -16,32 +16,17 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import {
+  ALIGNMENTS,
+  RESISTANCE_STYLES,
+  COUNTERFORCE_THRESHOLDS
+} from './constants.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Constants
+// Re-export constants for backward compatibility
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Alignment categories based on Counterforce score.
- * Score > 0.5: Actively resists the system
- * Score -0.3 to 0.5: Unaligned, neutral
- * Score < -0.3: Works within the system (collaborator)
- */
-export const ALIGNMENTS = {
-  COUNTERFORCE: 'counterforce',
-  NEUTRAL: 'neutral',
-  COLLABORATOR: 'collaborator'
-};
-
-/**
- * Resistance styles - how Counterforce members resist.
- */
-export const RESISTANCE_STYLES = {
-  CYNICAL: 'cynical',           // Diogenes - mockery, truth-telling
-  CHAOTIC: 'chaotic',           // Choronzon - disorder, entropy
-  REVOLUTIONARY: 'revolutionary', // Prometheus - direct opposition
-  TRICKSTER: 'trickster'        // Crowley - subversion through transformation
-};
+export { ALIGNMENTS, RESISTANCE_STYLES };
 
 /**
  * Default alignment scores for each persona.
@@ -156,8 +141,8 @@ function getPool() {
  * @returns {string} Alignment type (COUNTERFORCE, NEUTRAL, COLLABORATOR)
  */
 function classifyAlignment(score) {
-  if (score > 0.5) return ALIGNMENTS.COUNTERFORCE;
-  if (score < -0.3) return ALIGNMENTS.COLLABORATOR;
+  if (score > COUNTERFORCE_THRESHOLDS.COUNTERFORCE_MIN) return ALIGNMENTS.COUNTERFORCE;
+  if (score < COUNTERFORCE_THRESHOLDS.COLLABORATOR_MAX) return ALIGNMENTS.COLLABORATOR;
   return ALIGNMENTS.NEUTRAL;
 }
 

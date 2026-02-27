@@ -10,30 +10,18 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import {
+  EXTRACTION_CONFIG,
+  IMPORTANCE_WEIGHTS,
+  MEMORY_STORAGE,
+  MEMORY_IMPORTANCE
+} from './constants.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Constants
+// Re-export constants for backward compatibility
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Extraction configuration.
- */
-export const EXTRACTION_CONFIG = {
-  minMessages: 3,            // Minimum messages to consider extraction
-  maxMemoriesPerSession: 3,  // Cap memories created per session
-  memoryMaxLength: 500,      // Character limit for memory content
-  importanceThreshold: 0.3   // Minimum importance to store
-};
-
-/**
- * Pattern weights for importance calculation.
- */
-export const IMPORTANCE_WEIGHTS = {
-  personalDisclosure: 0.4,   // User shares personal info
-  questionDepth: 0.3,        // Follow-up questions
-  topicSignificance: 0.2,    // Domain-specific keywords
-  sessionLength: 0.1         // Duration bonus
-};
+export { EXTRACTION_CONFIG, IMPORTANCE_WEIGHTS };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Database Connection
@@ -163,7 +151,7 @@ export function analyzeForMemories(messages) {
         sourceIndex: i,
         content: msg.content,
         patterns,
-        estimatedImportance: patterns.length * 0.25
+        estimatedImportance: patterns.length * MEMORY_IMPORTANCE.PATTERN_WEIGHT
       });
     }
   }
@@ -379,14 +367,14 @@ export async function extractSessionMemories(sessionData) {
  */
 export async function generateEmbedding(text) {
   if (!process.env.OPENAI_API_KEY) return null;
-  if (!text || text.length < 10) return null;
+  if (!text || text.length < MEMORY_STORAGE.MIN_EMBED_LENGTH) return null;
 
   try {
     const { default: OpenAI } = await import('openai');
     const client = new OpenAI();
     const response = await client.embeddings.create({
       model: 'text-embedding-3-small',
-      input: text.slice(0, 8000)
+      input: text.slice(0, MEMORY_STORAGE.EMBEDDING_TEXT_LIMIT)
     });
     return response.data[0].embedding;
   } catch (error) {
@@ -484,10 +472,9 @@ export async function storeSessionMemories(userId, personaId, memories, client =
 
   // Batch size validation: PostgreSQL has a 65,535 parameter limit
   // With 5 parameters per memory, max safe batch is 13,000
-  const MAX_BATCH_SIZE = 13000;
-  if (memories.length > MAX_BATCH_SIZE) {
-    console.warn(`[MemoryExtractor] Batch size ${memories.length} exceeds limit, truncating to ${MAX_BATCH_SIZE}`);
-    memories = memories.slice(0, MAX_BATCH_SIZE);
+  if (memories.length > MEMORY_STORAGE.MAX_BATCH_SIZE) {
+    console.warn(`[MemoryExtractor] Batch size ${memories.length} exceeds limit, truncating to ${MEMORY_STORAGE.MAX_BATCH_SIZE}`);
+    memories = memories.slice(0, MEMORY_STORAGE.MAX_BATCH_SIZE);
   }
 
   try {

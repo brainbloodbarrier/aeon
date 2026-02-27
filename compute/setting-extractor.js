@@ -9,6 +9,7 @@
 
 import { logOperation } from './operator-logger.js';
 import { saveUserSettings, savePersonaLocation } from './setting-preserver.js';
+import { SETTING_CONFIDENCE } from './constants.js';
 
 /**
  * Pattern definitions for extracting setting preferences.
@@ -270,27 +271,27 @@ function calculateConfidence(prefs) {
 
   // Each preference type contributes to confidence
   if (prefs.musicPreference) {
-    score += 0.8;
+    score += SETTING_CONFIDENCE.MUSIC_WEIGHT;
     matches++;
   }
 
   if (Object.keys(prefs.atmosphereDescriptors).length > 0) {
-    score += 0.2 * Object.keys(prefs.atmosphereDescriptors).length;
+    score += SETTING_CONFIDENCE.ATMOSPHERE_WEIGHT * Object.keys(prefs.atmosphereDescriptors).length;
     matches++;
   }
 
   if (prefs.locationPreference) {
-    score += 0.7;
+    score += SETTING_CONFIDENCE.LOCATION_WEIGHT;
     matches++;
   }
 
   if (prefs.timeOfDay) {
-    score += 0.6;
+    score += SETTING_CONFIDENCE.TIME_WEIGHT;
     matches++;
   }
 
   if (prefs.personaLocations.length > 0) {
-    score += 0.5;
+    score += SETTING_CONFIDENCE.PERSONA_LOCATION_WEIGHT;
     matches++;
   }
 
@@ -348,7 +349,7 @@ export async function extractAndSaveSettings(sessionData, client = null) {
     };
 
     // Don't save if confidence is too low
-    if (extracted.confidence < 0.3) {
+    if (extracted.confidence < SETTING_CONFIDENCE.MIN_CONFIDENCE) {
       await logOperation('setting_extraction', {
         sessionId,
         personaId,

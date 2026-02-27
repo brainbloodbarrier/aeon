@@ -8,6 +8,7 @@
  */
 
 import { logOperation } from './operator-logger.js';
+import { DRIFT_CORRECTION } from './constants.js';
 
 /**
  * Drift correction templates by correction type.
@@ -24,12 +25,7 @@ const DRIFT_CORRECTION_TEMPLATES = {
 /**
  * Intensity levels for corrections based on drift severity.
  */
-const INTENSITY_LEVELS = {
-  STABLE: null,     // No correction needed
-  MINOR: 'gentle',  // Soft reminder
-  WARNING: 'firm',  // Direct reinforcement
-  CRITICAL: 'strong' // Emphatic correction
-};
+const INTENSITY_LEVELS = DRIFT_CORRECTION.INTENSITY_LEVELS;
 
 /**
  * Generate drift correction text as persona inner voice.
@@ -195,5 +191,5 @@ export async function generateDriftCorrection(
 export const CONFIG = {
   DRIFT_CORRECTION_TEMPLATES,
   INTENSITY_LEVELS,
-  CORRECTION_THRESHOLD: 0.1 // Minimum drift score to trigger correction
+  CORRECTION_THRESHOLD: DRIFT_CORRECTION.CORRECTION_THRESHOLD
 };

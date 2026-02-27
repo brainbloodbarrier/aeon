@@ -10,32 +10,17 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import {
+  TRUST_THRESHOLDS,
+  FAMILIARITY_CONFIG,
+  ENGAGEMENT_MULTIPLIERS
+} from './constants.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Constants
+// Re-export constants for backward compatibility
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Trust level thresholds based on familiarity_score.
- * Constitution Principle IV defines progression:
- * stranger → acquaintance → familiar → confidant
- */
-export const TRUST_THRESHOLDS = {
-  stranger: 0,
-  acquaintance: 0.2,
-  familiar: 0.5,
-  confidant: 0.8
-};
-
-/**
- * Familiarity calculation parameters.
- */
-export const FAMILIARITY_CONFIG = {
-  baseDelta: 0.02,          // Base familiarity increase per session
-  maxDelta: 0.05,           // Maximum increase per session
-  engagementFloor: 0.5,     // Minimum engagement multiplier
-  engagementCeiling: 2.0    // Maximum engagement multiplier
-};
+export { TRUST_THRESHOLDS, FAMILIARITY_CONFIG };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Database Connection
@@ -85,10 +70,10 @@ export function calculateEngagementScore(sessionQuality) {
   const { messageCount = 0, durationMs = 0, hasFollowUps = false, topicDepth = 0 } = sessionQuality;
 
   // Calculate individual components (each capped at 1.0)
-  const messageComponent = Math.min(messageCount * 0.1, 1.0);
-  const durationComponent = Math.min((durationMs / 60000) * 0.2, 1.0);
-  const followUpComponent = hasFollowUps ? 0.5 : 0;
-  const depthComponent = Math.min(topicDepth * 0.3, 0.9);
+  const messageComponent = Math.min(messageCount * ENGAGEMENT_MULTIPLIERS.MESSAGE_FACTOR, 1.0);
+  const durationComponent = Math.min((durationMs / 60000) * ENGAGEMENT_MULTIPLIERS.DURATION_FACTOR, 1.0);
+  const followUpComponent = hasFollowUps ? ENGAGEMENT_MULTIPLIERS.FOLLOW_UP_BONUS : 0;
+  const depthComponent = Math.min(topicDepth * ENGAGEMENT_MULTIPLIERS.DEPTH_FACTOR, ENGAGEMENT_MULTIPLIERS.MAX_DEPTH_SCORE);
 
   // Sum and normalize to engagement range
   const rawScore = messageComponent + durationComponent + followUpComponent + depthComponent;

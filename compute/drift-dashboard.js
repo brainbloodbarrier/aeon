@@ -10,6 +10,7 @@
  */
 
 import { getSharedPool } from './db-pool.js';
+import { DRIFT_DASHBOARD } from './constants.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Database Connection
@@ -71,7 +72,7 @@ export async function getPersonaDriftSummary(hours = 24) {
       minorCount: parseInt(row.minor_count) || 0,
       stableCount: parseInt(row.stable_count) || 0,
       totalAnalyses: parseInt(row.total_analyses) || 0,
-      needsAttention: parseInt(row.critical_count) > 0 || parseFloat(row.avg_drift) > 0.3
+      needsAttention: parseInt(row.critical_count) > 0 || parseFloat(row.avg_drift) > DRIFT_DASHBOARD.NEEDS_ATTENTION_THRESHOLD
     }));
   } catch (error) {
     console.error('[DriftDashboard] Error getting persona summary:', error.message);

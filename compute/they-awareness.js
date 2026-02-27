@@ -15,6 +15,11 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import {
+  AWARENESS_LEVELS,
+  AWARENESS_STATES,
+  THEY_AWARENESS_CONFIG
+} from './constants.js';
 
 // =============================================================================
 // Database Connection
@@ -95,31 +100,10 @@ export const THEY_PATTERNS = {
 };
 
 // =============================================================================
-// Awareness Levels
+// Re-export constants for backward compatibility
 // =============================================================================
 
-/**
- * Awareness level thresholds.
- * Each level represents increased paranoia.
- */
-export const AWARENESS_LEVELS = {
-  OBLIVIOUS: 0.2,    // Normal state - no awareness of Them
-  UNEASY: 0.4,       // Something feels off
-  SUSPICIOUS: 0.6,   // Sensing observation
-  PARANOID: 0.8,     // They are definitely watching
-  AWAKENED: 0.95,    // Full awareness - dangerous territory
-};
-
-/**
- * Awareness state names mapped to level ranges.
- */
-export const AWARENESS_STATES = {
-  OBLIVIOUS: 'oblivious',
-  UNEASY: 'uneasy',
-  SUSPICIOUS: 'suspicious',
-  PARANOID: 'paranoid',
-  AWAKENED: 'awakened',
-};
+export { AWARENESS_LEVELS, AWARENESS_STATES };
 
 // =============================================================================
 // Paranoia Context
@@ -238,7 +222,7 @@ export function detectTheyPatterns(content) {
 
   // Score is based on max weight, with a boost for multiple triggers
   // Multiple triggers indicate deeper probing toward awareness
-  const boostFactor = Math.min(1 + (matchCount - 1) * 0.08, 1.4);
+  const boostFactor = Math.min(1 + (matchCount - 1) * THEY_AWARENESS_CONFIG.BOOST_FACTOR, THEY_AWARENESS_CONFIG.MAX_BOOST);
   const awarenessScore = Math.min(maxWeight * boostFactor, 1.0);
 
   return {
@@ -296,8 +280,8 @@ export async function getParanoiaState() {
 
       // Apply time-based paranoia decay (paranoia fades slowly)
       const hoursSinceUpdate = (Date.now() - new Date(lastUpdated).getTime()) / (1000 * 60 * 60);
-      const decay = hoursSinceUpdate * 0.02; // Decay 0.02 per hour
-      level = Math.max(0.05, level - decay);
+      const decay = hoursSinceUpdate * THEY_AWARENESS_CONFIG.DECAY_RATE_PER_HOUR;
+      level = Math.max(THEY_AWARENESS_CONFIG.MIN_PARANOIA, level - decay);
     }
 
     const state = classifyAwarenessState(level);
@@ -452,7 +436,7 @@ export async function incrementAwareness(delta, reason, sessionId) {
  */
 export async function decayAwareness(hours = 1) {
   const startTime = performance.now();
-  const decayRate = 0.02; // 2% per hour
+  const decayRate = THEY_AWARENESS_CONFIG.DECAY_RATE_PER_HOUR;
   const delta = -(hours * decayRate);
 
   try {
@@ -463,8 +447,8 @@ export async function decayAwareness(hours = 1) {
     const previousLevel = current.level;
     const previousState = current.state;
 
-    // Calculate new level (minimum 0.05 - They never fully stop watching)
-    const newLevel = Math.max(0.05, previousLevel + delta);
+    // Calculate new level (minimum paranoia - They never fully stop watching)
+    const newLevel = Math.max(THEY_AWARENESS_CONFIG.MIN_PARANOIA, previousLevel + delta);
     const newState = classifyAwarenessState(newLevel);
     const stateChanged = previousState !== newState;
 

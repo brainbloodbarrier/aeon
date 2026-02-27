@@ -9,6 +9,7 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import { SETTING_CONFIG } from './constants.js';
 
 /**
  * Get database connection pool.
@@ -23,9 +24,9 @@ function getPool() {
  * Default setting configuration.
  */
 const DEFAULTS = {
-  timeOfDay: '2 AM',
-  location: 'O Fim',
-  tokenBudget: 200
+  timeOfDay: SETTING_CONFIG.DEFAULT_TIME,
+  location: SETTING_CONFIG.DEFAULT_LOCATION,
+  tokenBudget: SETTING_CONFIG.DEFAULT_TOKEN_BUDGET
 };
 
 /**
@@ -414,7 +415,7 @@ function compileSettingText(settings, personaLocation) {
  * @returns {string} Truncated text
  */
 function truncateToTokens(text, maxTokens) {
-  const maxChars = maxTokens * 4;
+  const maxChars = maxTokens * SETTING_CONFIG.CHARS_PER_TOKEN;
   if (text.length <= maxChars) {
     return text;
   }
@@ -423,7 +424,7 @@ function truncateToTokens(text, maxTokens) {
   const truncated = text.slice(0, maxChars);
   const lastSentence = truncated.lastIndexOf('.');
 
-  if (lastSentence > maxChars * 0.7) {
+  if (lastSentence > maxChars * SETTING_CONFIG.SENTENCE_BOUNDARY_RATIO) {
     return truncated.slice(0, lastSentence + 1);
   }
 

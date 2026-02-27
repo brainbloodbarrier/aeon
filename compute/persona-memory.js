@@ -10,37 +10,15 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import { PERSONA_MEMORY } from './constants.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Constants
+// Re-export constants for backward compatibility
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Valid memory types for persona memories.
- */
-export const MEMORY_TYPES = {
-  opinion: 'opinion',     // Stance on a subject
-  fact: 'fact',           // Established knowledge
-  interaction: 'interaction', // What happened in a council/discussion
-  insight: 'insight',     // A realization or epiphany
-  learned: 'learned'      // Something learned from another persona
-};
-
-/**
- * Default importance scores by memory type.
- */
-export const DEFAULT_IMPORTANCE = {
-  opinion: 0.7,
-  fact: 0.5,
-  interaction: 0.6,
-  insight: 0.8,
-  learned: 0.6
-};
-
-/**
- * Maximum memories to retrieve per query.
- */
-export const MAX_MEMORIES_PER_QUERY = 10;
+export const MEMORY_TYPES = PERSONA_MEMORY.MEMORY_TYPES;
+export const DEFAULT_IMPORTANCE = PERSONA_MEMORY.DEFAULT_IMPORTANCE;
+export const MAX_MEMORIES_PER_QUERY = PERSONA_MEMORY.MAX_MEMORIES_PER_QUERY;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Database Connection

@@ -9,6 +9,7 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import { MEMORY_FRAMING } from './constants.js';
 
 /**
  * Get database connection pool.
@@ -58,10 +59,10 @@ function frameMemory(memory, template, userRef) {
     return '';
   }
 
-  // Truncate content if too long (max 300 chars per frame)
+  // Truncate content if too long
   let content = memory.content.trim();
-  if (content.length > 300) {
-    content = content.substring(0, 297) + '...';
+  if (content.length > MEMORY_FRAMING.MAX_MEMORY_CHARS) {
+    content = content.substring(0, MEMORY_FRAMING.MAX_MEMORY_CHARS - 3) + '...';
   }
 
   // Replace placeholders
@@ -212,5 +213,5 @@ async function loadCustomTemplates(personaId) {
 export const CONFIG = {
   DEFAULT_TEMPLATES,
   USER_REFERENCES,
-  MAX_MEMORY_CHARS: 300
+  MAX_MEMORY_CHARS: MEMORY_FRAMING.MAX_MEMORY_CHARS
 };

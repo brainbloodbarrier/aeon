@@ -17,39 +17,19 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import {
+  ARC_PHASES,
+  PHASE_THRESHOLDS,
+  MOMENTUM_CONFIG,
+  PHASE_EFFECTS,
+  IMPACT_RECOVERY_LIMIT
+} from './constants.js';
 
 // =============================================================================
-// Constants
+// Re-export constants for backward compatibility
 // =============================================================================
 
-/**
- * Arc phases following rocket parabola.
- */
-export const ARC_PHASES = {
-  RISING: 'rising',     // Momentum building, questions deepening
-  APEX: 'apex',         // Peak insight, crystallization
-  FALLING: 'falling',   // Descent, entropy creeping in
-  IMPACT: 'impact'      // Exhaustion, conversation spent
-};
-
-/**
- * Phase thresholds (based on momentum 0-1).
- */
-export const PHASE_THRESHOLDS = {
-  APEX_MIN: 0.7,        // Enter apex above this
-  FALLING_BELOW: 0.5,   // Enter falling below this (from apex)
-  IMPACT_BELOW: 0.2     // Impact when very low
-};
-
-/**
- * Momentum modifiers for message analysis.
- */
-const MOMENTUM_CONFIG = {
-  initialMomentum: 0.4,   // Starting momentum for new sessions
-  maxMomentum: 1.0,
-  minMomentum: 0.0,
-  baseDecay: 0.02         // Natural decay per message
-};
+export { ARC_PHASES, PHASE_THRESHOLDS };
 
 /**
  * Patterns that increase momentum.
@@ -182,31 +162,7 @@ const ARC_CONTEXT_PROSE = {
   ]
 };
 
-/**
- * Phase effects on other systems.
- */
-const PHASE_EFFECTS = {
-  [ARC_PHASES.RISING]: {
-    entropyModifier: -0.02,
-    preteriteChance: 0.1,
-    insightBonus: 0.1
-  },
-  [ARC_PHASES.APEX]: {
-    entropyModifier: -0.1,
-    preteriteChance: 0.05,
-    insightBonus: 0.3
-  },
-  [ARC_PHASES.FALLING]: {
-    entropyModifier: 0.05,
-    preteriteChance: 0.2,
-    insightBonus: -0.1
-  },
-  [ARC_PHASES.IMPACT]: {
-    entropyModifier: 0.15,
-    preteriteChance: 0.4,
-    insightBonus: -0.3
-  }
-};
+// PHASE_EFFECTS imported from constants.js
 
 // =============================================================================
 // Phase Classification
@@ -428,7 +384,7 @@ export function analyzeMomentum(message, currentPhase, currentMomentum) {
   // Phase-specific modifiers
   if (currentPhase === ARC_PHASES.IMPACT) {
     // At impact, very hard to regain momentum
-    delta = Math.min(delta, 0.02);
+    delta = Math.min(delta, IMPACT_RECOVERY_LIMIT);
   }
 
   return {

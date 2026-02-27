@@ -13,6 +13,7 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import { ZONE_THRESHOLDS, ZONE_BOOST } from './constants.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Database Connection
@@ -177,14 +178,14 @@ export function calculateBoundaryProximity(content) {
 
   // Proximity is the max weight, boosted slightly by multiple triggers
   // Multiple triggers indicate deeper probing
-  const boostFactor = Math.min(1 + (matchCount - 1) * 0.05, 1.2);
+  const boostFactor = Math.min(1 + (matchCount - 1) * ZONE_BOOST.FACTOR, ZONE_BOOST.MAX);
   const proximity = Math.min(maxWeight * boostFactor, 1.0);
 
   return {
     proximity,
     triggers,
-    isApproaching: proximity > 0.3,
-    isCritical: proximity > 0.85,
+    isApproaching: proximity > ZONE_THRESHOLDS.APPROACHING,
+    isCritical: proximity > ZONE_THRESHOLDS.CRITICAL,
   };
 }
 
@@ -195,17 +196,17 @@ export function calculateBoundaryProximity(content) {
  * @returns {string|null} Resistance response or null if no resistance
  */
 export function selectZoneResistance(proximity) {
-  if (proximity < 0.3) {
+  if (proximity < ZONE_THRESHOLDS.SUBTLE) {
     return null; // Zone allows this question
   }
 
   let responses;
 
-  if (proximity < 0.5) {
+  if (proximity < ZONE_THRESHOLDS.MODERATE) {
     responses = ZONE_RESISTANCE.subtle;
-  } else if (proximity < 0.7) {
+  } else if (proximity < ZONE_THRESHOLDS.STRONG) {
     responses = ZONE_RESISTANCE.moderate;
-  } else if (proximity < 0.9) {
+  } else if (proximity < ZONE_THRESHOLDS.EXTREME) {
     responses = ZONE_RESISTANCE.strong;
   } else {
     responses = ZONE_RESISTANCE.extreme;

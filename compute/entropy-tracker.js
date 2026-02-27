@@ -14,44 +14,17 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import {
+  ENTROPY_THRESHOLDS,
+  ENTROPY_STATES,
+  ENTROPY_CONFIG
+} from './constants.js';
 
 // =============================================================================
-// Constants
+// Re-export constants for backward compatibility
 // =============================================================================
 
-/**
- * Entropy state thresholds.
- * Each threshold defines the upper bound for that state.
- */
-export const ENTROPY_THRESHOLDS = {
-  STABLE: 0.3,
-  UNSETTLED: 0.5,
-  DECAYING: 0.7,
-  FRAGMENTING: 0.9,
-  DISSOLVING: 1.0
-};
-
-/**
- * Entropy state names mapped to threshold ranges.
- */
-export const ENTROPY_STATES = {
-  STABLE: 'stable',
-  UNSETTLED: 'unsettled',
-  DECAYING: 'decaying',
-  FRAGMENTING: 'fragmenting',
-  DISSOLVING: 'dissolving'
-};
-
-/**
- * Default entropy configuration.
- */
-export const ENTROPY_CONFIG = {
-  baseSessionDelta: 0.02,    // Base entropy increase per session
-  timeDecayFactor: 0.001,    // Entropy increase per hour of inactivity
-  maxEntropy: 1.0,           // Maximum entropy level
-  minEntropy: 0.0,           // Minimum entropy level
-  defaultLevel: 0.15         // Starting entropy for new instances
-};
+export { ENTROPY_THRESHOLDS, ENTROPY_STATES, ENTROPY_CONFIG };
 
 /**
  * Effects by entropy state level.

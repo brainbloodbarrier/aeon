@@ -18,41 +18,17 @@
  */
 
 import { logOperation } from './operator-logger.js';
+import {
+  BLEED_TYPES,
+  BLEED_THRESHOLDS,
+  BLEED_SEVERITY
+} from './constants.js';
 
 // =============================================================================
-// Constants
+// Re-export constants for backward compatibility
 // =============================================================================
 
-/**
- * Types of system artifacts that can bleed through.
- */
-export const BLEED_TYPES = {
-  TIMESTAMP: 'timestamp',           // Corrupted timestamps appear
-  ERROR_FRAGMENT: 'error_fragment', // Partial error messages
-  LOG_LEAK: 'log_leak',             // Operator log fragments
-  MEMORY_ADDRESS: 'memory_address', // Hex addresses, pointers
-  QUERY_ECHO: 'query_echo',         // SQL fragments
-  PROCESS_ID: 'process_id'          // System process references
-};
-
-/**
- * Entropy thresholds for bleeds.
- * Higher entropy = more likely to bleed.
- */
-export const BLEED_THRESHOLDS = {
-  RARE: 0.5,      // Occasional bleeds possible
-  FREQUENT: 0.7,  // Bleeds become common
-  SEVERE: 0.9     // Constant system breakdown
-};
-
-/**
- * Bleed severity levels.
- */
-export const BLEED_SEVERITY = {
-  MINOR: 'minor',       // Subtle glitch
-  MODERATE: 'moderate', // Noticeable corruption
-  SEVERE: 'severe'      // Reality breakdown
-};
+export { BLEED_TYPES, BLEED_THRESHOLDS, BLEED_SEVERITY };
 
 /**
  * Zalgo character sets for text corruption.

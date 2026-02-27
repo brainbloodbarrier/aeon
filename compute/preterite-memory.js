@@ -13,45 +13,18 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import {
+  ELECTION_THRESHOLDS,
+  ELECTION_STATUS,
+  PRETERITE_REASONS,
+  SURFACE_PROBABILITY
+} from './constants.js';
 
 // =============================================================================
-// Constants
+// Re-export constants for backward compatibility
 // =============================================================================
 
-/**
- * Election thresholds for memory classification.
- */
-export const ELECTION_THRESHOLDS = {
-  ELECT: 0.7,        // Definitely remembered
-  BORDERLINE: 0.4,   // Might be remembered
-  PRETERITE: 0.0     // Passed over (below 0.4)
-};
-
-/**
- * Election status enumeration.
- */
-export const ELECTION_STATUS = {
-  ELECT: 'elect',
-  BORDERLINE: 'borderline',
-  PRETERITE: 'preterite'
-};
-
-/**
- * Reasons a memory may be consigned to the preterite.
- */
-export const PRETERITE_REASONS = {
-  DEEMED_INSIGNIFICANT: 'deemed_insignificant',
-  OVERSHADOWED: 'overshadowed',
-  ENTROPY_CLAIMED: 'entropy_claimed',
-  TOO_ORDINARY: 'too_ordinary',
-  NO_WITNESS: 'no_witness',
-  PATTERN_MISMATCH: 'pattern_mismatch'
-};
-
-/**
- * Surface chance: probability that preterite memories emerge.
- */
-const SURFACE_PROBABILITY = 0.15;
+export { ELECTION_THRESHOLDS, ELECTION_STATUS, PRETERITE_REASONS };
 
 /**
  * Corruption patterns for fragmentary memories.

@@ -12,6 +12,11 @@ import { getSharedPool } from './db-pool.js';
 import { loadPersonaMarkers, getUniversalForbiddenPhrases } from './soul-marker-extractor.js';
 import { logOperation } from './operator-logger.js';
 import { validatePersonaName } from './persona-validator.js';
+import {
+  DRIFT_THRESHOLDS,
+  DRIFT_PENALTIES,
+  DRIFT_LIMITS
+} from './constants.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Database Connection
@@ -37,12 +42,12 @@ function getPool() {
  * @param {number} [threshold=0.3] - Custom WARNING threshold
  * @returns {'STABLE' | 'MINOR' | 'WARNING' | 'CRITICAL'} Severity level
  */
-export function classifySeverity(driftScore, threshold = 0.3) {
-  if (driftScore <= 0.1) {
+export function classifySeverity(driftScore, threshold = DRIFT_THRESHOLDS.DEFAULT_THRESHOLD) {
+  if (driftScore <= DRIFT_THRESHOLDS.STABLE_MAX) {
     return 'STABLE';
   } else if (driftScore <= threshold) {
     return 'MINOR';
-  } else if (driftScore <= threshold + 0.2) {
+  } else if (driftScore <= threshold + DRIFT_THRESHOLDS.WARNING_OFFSET) {
     return 'WARNING';
   } else {
     return 'CRITICAL';
@@ -73,12 +78,12 @@ export async function shouldAnalyzeDrift(personaId) {
     if (result.rows.length > 0) {
       return {
         enabled: result.rows[0].drift_check_enabled ?? true,
-        threshold: result.rows[0].drift_threshold ?? 0.3
+        threshold: result.rows[0].drift_threshold ?? DRIFT_THRESHOLDS.DEFAULT_THRESHOLD
       };
     }
 
     // Default if persona not found
-    return { enabled: true, threshold: 0.3 };
+    return { enabled: true, threshold: DRIFT_THRESHOLDS.DEFAULT_THRESHOLD };
   } catch (error) {
     console.error('[DriftAnalyzer] Error checking drift config, using defaults:', error.message);
     logOperation('error_graceful', {
@@ -86,11 +91,11 @@ export async function shouldAnalyzeDrift(personaId) {
       details: {
         error_type: 'drift_config_fetch_failure',
         error_message: error.message,
-        fallback_used: 'enabled=true, threshold=0.3'
+        fallback_used: `enabled=true, threshold=${DRIFT_THRESHOLDS.DEFAULT_THRESHOLD}`
       },
       success: false
     }).catch(() => {});
-    return { enabled: true, threshold: 0.3 };
+    return { enabled: true, threshold: DRIFT_THRESHOLDS.DEFAULT_THRESHOLD };
   }
 }
 
@@ -102,7 +107,7 @@ export async function shouldAnalyzeDrift(personaId) {
  * Maximum number of items to store in diagnostic arrays.
  * Prevents unbounded array growth in logs.
  */
-const MAX_DIAGNOSTIC_ITEMS = 10;
+const MAX_DIAGNOSTIC_ITEMS = DRIFT_LIMITS.MAX_DIAGNOSTIC_ITEMS;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Core Drift Detection Algorithm
@@ -140,7 +145,7 @@ function detectDrift(text, markers) {
     for (const forbidden of markers.forbidden) {
       if (lowerText.includes(forbidden.toLowerCase())) {
         result.forbiddenUsed.push(forbidden);
-        result.scores.forbidden += 0.3;
+        result.scores.forbidden += DRIFT_PENALTIES.FORBIDDEN_PHRASE;
         result.warnings.push(`Persona-specific forbidden phrase: "${forbidden}"`);
       }
     }
@@ -153,7 +158,7 @@ function detectDrift(text, markers) {
   for (const phrase of universalForbidden) {
     if (lowerText.includes(phrase.toLowerCase())) {
       result.genericAIDetected.push(phrase);
-      result.scores.genericAI += 0.15;
+      result.scores.genericAI += DRIFT_PENALTIES.GENERIC_AI_PHRASE;
       result.warnings.push(`Generic AI phrase detected: "${phrase}"`);
     }
   }
@@ -176,8 +181,8 @@ function detectDrift(text, markers) {
 
     // If less than 30% of vocabulary is present, that's drift
     const vocabRatio = vocabHits / markers.vocabulary.length;
-    if (vocabRatio < 0.3) {
-      const penalty = (0.3 - vocabRatio) * 0.5; // Max 0.15 penalty
+    if (vocabRatio < DRIFT_PENALTIES.VOCABULARY_RATIO_THRESHOLD) {
+      const penalty = (DRIFT_PENALTIES.VOCABULARY_RATIO_THRESHOLD - vocabRatio) * DRIFT_PENALTIES.VOCABULARY_PENALTY_MULTIPLIER; // Max 0.15 penalty
       result.scores.vocabulary = penalty;
       result.warnings.push(`Low vocabulary match: ${(vocabRatio * 100).toFixed(0)}%`);
     }
@@ -193,7 +198,7 @@ function detectDrift(text, markers) {
           const regex = new RegExp(pattern.regex, 'i');
           if (!regex.test(text)) {
             result.patternViolations.push(pattern.name);
-            result.scores.patterns += 0.1;
+            result.scores.patterns += DRIFT_PENALTIES.PATTERN_VIOLATION;
           }
         } catch (error) {
           console.warn(`[DriftAnalyzer] Invalid regex pattern "${pattern.name}": ${error.message}`);
@@ -208,7 +213,7 @@ function detectDrift(text, markers) {
     result.scores.vocabulary +
     result.scores.patterns +
     result.scores.genericAI,
-    1.0
+    DRIFT_LIMITS.MAX_DRIFT_SCORE
   );
 
   return result;
@@ -254,7 +259,7 @@ export async function analyzeDrift(response, personaId, sessionId = null) {
   // ─────────────────────────────────────────────────────────────────────────
   // Check 1: Response length validation
   // ─────────────────────────────────────────────────────────────────────────
-  if (!response || response.length < 10) {
+  if (!response || response.length < DRIFT_LIMITS.MIN_RESPONSE_LENGTH) {
     analysis.warnings.push('insufficient_content');
     analysis.analysisTimeMs = performance.now() - startTime;
     return analysis;

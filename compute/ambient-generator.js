@@ -13,6 +13,7 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import { ENTROPY_THRESHOLDS, AMBIENT_CONFIG } from './constants.js';
 
 /**
  * Get database connection pool.
@@ -98,14 +99,14 @@ const MICRO_EVENT_TEMPLATES = {
 };
 
 /**
- * Entropy state thresholds and labels.
+ * Entropy state thresholds and labels (derived from centralized constants).
  */
-const ENTROPY_STATES = {
-  stable: { min: 0, max: 0.3 },
-  unsettled: { min: 0.3, max: 0.5 },
-  decaying: { min: 0.5, max: 0.7 },
-  fragmenting: { min: 0.7, max: 0.9 },
-  dissolving: { min: 0.9, max: 1.0 }
+const ENTROPY_STATES_RANGES = {
+  stable: { min: 0, max: ENTROPY_THRESHOLDS.STABLE },
+  unsettled: { min: ENTROPY_THRESHOLDS.STABLE, max: ENTROPY_THRESHOLDS.UNSETTLED },
+  decaying: { min: ENTROPY_THRESHOLDS.UNSETTLED, max: ENTROPY_THRESHOLDS.DECAYING },
+  fragmenting: { min: ENTROPY_THRESHOLDS.DECAYING, max: ENTROPY_THRESHOLDS.FRAGMENTING },
+  dissolving: { min: ENTROPY_THRESHOLDS.FRAGMENTING, max: ENTROPY_THRESHOLDS.DISSOLVING }
 };
 
 /**
@@ -136,10 +137,10 @@ export function getTimeOfNight() {
  * @returns {string} Entropy state label
  */
 function getEntropyState(entropyLevel) {
-  if (entropyLevel < 0.3) return 'stable';
-  if (entropyLevel < 0.5) return 'unsettled';
-  if (entropyLevel < 0.7) return 'decaying';
-  if (entropyLevel < 0.9) return 'fragmenting';
+  if (entropyLevel < ENTROPY_THRESHOLDS.STABLE) return 'stable';
+  if (entropyLevel < ENTROPY_THRESHOLDS.UNSETTLED) return 'unsettled';
+  if (entropyLevel < ENTROPY_THRESHOLDS.DECAYING) return 'decaying';
+  if (entropyLevel < ENTROPY_THRESHOLDS.FRAGMENTING) return 'fragmenting';
   return 'dissolving';
 }
 

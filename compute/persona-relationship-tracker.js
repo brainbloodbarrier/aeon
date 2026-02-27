@@ -10,21 +10,16 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
+import {
+  AFFINITY_THRESHOLDS,
+  MAX_AFFINITY_DELTA
+} from './constants.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Constants
+// Re-export constants for backward compatibility
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Relationship type thresholds based on affinity score.
- */
-export const AFFINITY_THRESHOLDS = {
-  adversary: -0.6,
-  rival: -0.3,
-  neutral: 0.0,
-  colleague: 0.3,
-  ally: 0.6
-};
+export { AFFINITY_THRESHOLDS, MAX_AFFINITY_DELTA };
 
 /**
  * Initial affinity values based on persona category relationships.
@@ -61,11 +56,6 @@ export const CATEGORY_AFFINITIES = {
 
   'enochian:enochian': 0.5               // Celestial kinship
 };
-
-/**
- * Maximum affinity change per interaction.
- */
-export const MAX_AFFINITY_DELTA = 0.15;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Database Connection

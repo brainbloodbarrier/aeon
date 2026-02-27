@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { getSharedPool } from './db-pool.js';
 import { validatePersonaName } from './persona-validator.js';
+import { SOUL_CACHE_TTL_MS, SOUL_MIN_CONTENT_LENGTH } from './constants.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -91,8 +92,8 @@ export function validateStructure(content) {
   }
 
   // Check minimum content length
-  if (content.trim().length < 100) {
-    missingRequired.push('Minimum content length (100 chars)');
+  if (content.trim().length < SOUL_MIN_CONTENT_LENGTH) {
+    missingRequired.push(`Minimum content length (${SOUL_MIN_CONTENT_LENGTH} chars)`);
   }
 
   return {
@@ -306,7 +307,7 @@ export async function validateSoulOrThrow(personaName) {
 
 /** @type {Map<string, {result: Object, timestamp: number}>} */
 const validationCache = new Map();
-const CACHE_TTL_MS = 60_000; // Re-validate every 60 seconds
+const CACHE_TTL_MS = SOUL_CACHE_TTL_MS;
 
 /**
  * Validate a persona's soul file with caching.
