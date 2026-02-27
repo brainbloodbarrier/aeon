@@ -288,6 +288,18 @@ export const ENTROPY_CONFIG = {
   defaultLevel: 0.15
 };
 
+/**
+ * Cross-session entropy persistence configuration.
+ * Entropy decays exponentially between sessions based on elapsed time.
+ * Formula: storedEntropy * Math.exp(-decayRate * hoursSinceLastUpdate)
+ */
+export const ENTROPY_PERSISTENCE = {
+  /** Exponential decay rate per hour (e.g. 0.01 = ~1% per hour) */
+  DECAY_RATE: 0.01,
+  /** Default entropy value when no persisted state exists */
+  DEFAULT_VALUE: 0.15
+};
+
 // =============================================================================
 // Narrative Gravity / Arc Phases (Pynchon Layer)
 // =============================================================================

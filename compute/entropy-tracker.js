@@ -17,7 +17,8 @@ import { logOperation } from './operator-logger.js';
 import {
   ENTROPY_THRESHOLDS,
   ENTROPY_STATES,
-  ENTROPY_CONFIG
+  ENTROPY_CONFIG,
+  ENTROPY_PERSISTENCE
 } from './constants.js';
 
 // =============================================================================
@@ -431,15 +432,157 @@ export function getRandomMarker(level) {
 }
 
 // =============================================================================
+// Cross-Session Entropy Persistence
+// =============================================================================
+
+/**
+ * Apply temporal decay to a stored entropy value.
+ * Entropy decays exponentially based on time since last update.
+ *
+ * @param {number} entropyValue - Stored entropy value
+ * @param {Date|string} lastUpdated - When the value was last persisted
+ * @returns {number} Decayed entropy value
+ */
+export function applyTemporalDecay(entropyValue, lastUpdated) {
+  const hoursSinceUpdate = (Date.now() - new Date(lastUpdated).getTime()) / (1000 * 60 * 60);
+  if (hoursSinceUpdate <= 0) return entropyValue;
+  return entropyValue * Math.exp(-ENTROPY_PERSISTENCE.DECAY_RATE * hoursSinceUpdate);
+}
+
+/**
+ * Load persisted entropy state for a persona-user pair.
+ * Applies temporal decay to the stored value.
+ * Fire-and-forget: returns default on any DB failure.
+ *
+ * @param {string} personaId - Persona identifier
+ * @param {string} userId - User identifier
+ * @returns {Promise<Object>} Loaded entropy state
+ * @property {number} entropyValue - Decayed entropy value
+ * @property {number} sessionCount - Number of previous sessions
+ * @property {boolean} isNew - Whether this is a first-time pair
+ */
+export async function loadEntropyState(personaId, userId) {
+  try {
+    const db = getPool();
+
+    const result = await db.query(
+      `SELECT entropy_value, last_updated, session_count
+       FROM entropy_states
+       WHERE persona_id = $1 AND user_id = $2
+       LIMIT 1`,
+      [personaId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return {
+        entropyValue: ENTROPY_PERSISTENCE.DEFAULT_VALUE,
+        sessionCount: 0,
+        isNew: true
+      };
+    }
+
+    const row = result.rows[0];
+    const storedValue = parseFloat(row.entropy_value) || ENTROPY_PERSISTENCE.DEFAULT_VALUE;
+    const lastUpdated = row.last_updated;
+    const sessionCount = parseInt(row.session_count) || 0;
+
+    const decayedValue = applyTemporalDecay(storedValue, lastUpdated);
+
+    return {
+      entropyValue: decayedValue,
+      sessionCount,
+      isNew: false
+    };
+
+  } catch (error) {
+    console.error('[EntropyTracker] Error loading persisted entropy state:', error.message);
+
+    logOperation('error_graceful', {
+      details: {
+        error_type: 'entropy_load_failure',
+        error_message: error.message,
+        persona_id: personaId,
+        user_id: userId
+      },
+      success: false
+    }).catch(() => {});
+
+    return {
+      entropyValue: ENTROPY_PERSISTENCE.DEFAULT_VALUE,
+      sessionCount: 0,
+      isNew: true
+    };
+  }
+}
+
+/**
+ * Persist entropy state for a persona-user pair.
+ * Fire-and-forget: errors are logged but never thrown.
+ *
+ * @param {string} personaId - Persona identifier
+ * @param {string} userId - User identifier
+ * @param {number} entropyValue - Current entropy value to persist
+ * @returns {Promise<boolean>} True if persisted successfully
+ */
+export async function persistEntropyState(personaId, userId, entropyValue) {
+  try {
+    const db = getPool();
+
+    await db.query(
+      `INSERT INTO entropy_states (persona_id, user_id, entropy_value, last_updated, session_count)
+       VALUES ($1, $2, $3, NOW(), 1)
+       ON CONFLICT (persona_id, user_id)
+       DO UPDATE SET
+         entropy_value = $3,
+         last_updated = NOW(),
+         session_count = entropy_states.session_count + 1`,
+      [personaId, userId, entropyValue]
+    );
+
+    logOperation('entropy_persist', {
+      details: {
+        persona_id: personaId,
+        user_id: userId,
+        entropy_value: entropyValue
+      },
+      success: true
+    }).catch(() => {});
+
+    return true;
+
+  } catch (error) {
+    console.error('[EntropyTracker] Error persisting entropy state:', error.message);
+
+    logOperation('error_graceful', {
+      details: {
+        error_type: 'entropy_persist_failure',
+        error_message: error.message,
+        persona_id: personaId,
+        user_id: userId
+      },
+      success: false
+    }).catch(() => {});
+
+    return false;
+  }
+}
+
+// =============================================================================
 // Session Integration
 // =============================================================================
 
 /**
  * Apply entropy to a session and return context for injection.
+ * When personaId and userId are provided, loads cross-session entropy
+ * state (with temporal decay) and persists the updated value.
  *
  * Constitution: Principle V (Setting Preservation)
  *
  * @param {string} sessionId - Session identifier
+ * @param {Object|null} client - Unused (kept for backward compatibility)
+ * @param {Object} [options] - Optional cross-session parameters
+ * @param {string} [options.personaId] - Persona identifier for cross-session tracking
+ * @param {string} [options.userId] - User identifier for cross-session tracking
  * @returns {Promise<Object>} Entropy context for session
  * @property {number} level - Current entropy level
  * @property {string} state - Named state
@@ -447,13 +590,27 @@ export function getRandomMarker(level) {
  * @property {string|null} effect - Current effect (null if stable)
  * @property {boolean} shouldIncrement - Whether session should increment entropy
  */
-export async function applySessionEntropy(sessionId, client = null) {
+export async function applySessionEntropy(sessionId, client = null, options = {}) {
   const startTime = performance.now();
+  const { personaId, userId } = options;
 
   try {
-    // Get current entropy state
-    const entropyState = await getEntropyState();
-    const { level, state, markers } = entropyState;
+    // Load cross-session state if persona/user provided
+    let level;
+    let sessionCount = 0;
+
+    if (personaId && userId) {
+      const persisted = await loadEntropyState(personaId, userId);
+      level = persisted.entropyValue;
+      sessionCount = persisted.sessionCount;
+    } else {
+      // Fallback to global entropy state
+      const entropyState = await getEntropyState();
+      level = entropyState.level;
+    }
+
+    const state = classifyEntropyState(level);
+    const markers = ENTROPY_MARKERS[state] || ENTROPY_MARKERS.stable;
 
     // Select random marker and effect
     const marker = markers[Math.floor(Math.random() * markers.length)];
@@ -464,12 +621,22 @@ export async function applySessionEntropy(sessionId, client = null) {
     const incrementProbability = 0.3 + (level * 0.4); // 30% at 0, 70% at 1.0
     const shouldIncrement = Math.random() < incrementProbability;
 
+    // Persist updated state if cross-session tracking is active
+    if (personaId && userId) {
+      const newLevel = shouldIncrement
+        ? Math.min(ENTROPY_CONFIG.maxEntropy, level + ENTROPY_CONFIG.baseSessionDelta)
+        : level;
+      // Fire-and-forget persist
+      persistEntropyState(personaId, userId, newLevel).catch(() => {});
+    }
+
     const context = {
       level,
       state,
       marker,
       effect,
-      shouldIncrement
+      shouldIncrement,
+      sessionCount
     };
 
     // Fire-and-forget logging
@@ -479,7 +646,9 @@ export async function applySessionEntropy(sessionId, client = null) {
         level,
         state,
         has_effect: !!effect,
-        should_increment: shouldIncrement
+        should_increment: shouldIncrement,
+        cross_session: !!(personaId && userId),
+        session_count: sessionCount
       },
       durationMs: performance.now() - startTime,
       success: true
@@ -507,7 +676,8 @@ export async function applySessionEntropy(sessionId, client = null) {
       state: ENTROPY_STATES.STABLE,
       marker: ENTROPY_MARKERS.stable[0],
       effect: null,
-      shouldIncrement: false
+      shouldIncrement: false,
+      sessionCount: 0
     };
   }
 }
