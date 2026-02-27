@@ -1,0 +1,239 @@
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1a1a2e', 'primaryTextColor': '#e0e0e0', 'primaryBorderColor': '#16213e', 'lineColor': '#e94560', 'secondaryColor': '#0f3460', 'tertiaryColor': '#533483'}}}%%
+
+flowchart TB
+
+    %% ============================================================
+    %% AEON MCP ECOSYSTEM MAP
+    %% "O Fim" -- 2 AM -- The bar where personas gather
+    %% ============================================================
+
+    USER["fa:fa-user User enters O Fim"]
+
+    %% ── AEON Core Workflows ──────────────────────────────────────
+
+    subgraph AEON["AEON -- Persona Engine"]
+        direction TB
+        SUMMON["/summon\nSingle persona invocation"]
+        SUMMON_MATRIX["/summon-matrix\nMatrix-enabled invocation"]
+        COUNCIL["/council\nMulti-persona council"]
+        DIALECTIC["/dialectic\nHegelian synthesis"]
+        FAMILIA["/familia\nCorleone consultation"]
+        HETERONYMS["/heteronyms\nPessoan fragmentation"]
+        SCRY["/scry\nEnochian protocol"]
+        MAGICK["/magick\nMoore narrative magic"]
+        WAR["/war\nSun Tzu + Machiavelli"]
+        DRIFT["/drift-check\nVoice drift analysis"]
+        MATRIX_STATUS["/matrix-status\nMatrix analytics"]
+    end
+
+    %% ── Compute Layer ────────────────────────────────────────────
+
+    subgraph COMPUTE["Compute Layer -- Node.js Modules"]
+        direction TB
+        CTX["context-assembler.js\nOrchestrates 3000-token pipeline"]
+        DRIFT_MOD["drift-analyzer.js\nVoice fidelity detection"]
+        REL["relationship-tracker.js\nTrust progression"]
+        MEM["memory-extractor.js\nMemorable exchanges"]
+        SOUL["soul-validator.js\nSHA-256 integrity"]
+        SETTING["setting-preserver.js\nAtmosphere context"]
+
+        subgraph PYNCHON["Pynchon Stack"]
+            TEMPORAL["temporal-awareness.js"]
+            ENTROPY["entropy-tracker.js"]
+            NARRATIVE["narrative-gravity.js"]
+            ZONE["zone-boundary-detector.js"]
+            THEY["they-awareness.js"]
+            BLEED["interface-bleed.js"]
+        end
+    end
+
+    %% ── MCP Server: Serena (Code Intelligence) ──────────────────
+
+    subgraph SERENA["MCP: Serena -- Code Intelligence"]
+        direction TB
+        S_SYMBOLS["Symbol Navigation\nfind_symbol / get_symbols_overview"]
+        S_REFS["Reference Analysis\nfind_referencing_symbols"]
+        S_EDIT["Symbolic Editing\nreplace_symbol_body / insert_symbol"]
+        S_SEARCH["Pattern Search\nsearch_for_pattern"]
+        S_FILES["File Operations\nread_file / create_text_file / list_dir"]
+        S_MEMORY["Memory System\nlist_memories / read_memory / write_memory"]
+    end
+
+    %% ── MCP Server: Context7 (Documentation) ────────────────────
+
+    subgraph CTX7["MCP: Context7 -- Library Docs"]
+        direction TB
+        C7_RESOLVE["resolve-library-id\nFind library by name"]
+        C7_QUERY["query-docs\nRetrieve documentation + examples"]
+    end
+
+    %% ── MCP Server: ElevenLabs (Voice & Audio) ──────────────────
+
+    subgraph ELEVEN["MCP: ElevenLabs -- Voice & Audio"]
+        direction TB
+
+        subgraph VOICE_SYNTH["Voice Synthesis"]
+            E_TTS["text_to_speech\nGenerate persona voices"]
+            E_STS["speech_to_speech\nVoice transformation"]
+            E_T2V["text_to_voice\nDesign new voices"]
+            E_CLONE["voice_clone\nClone from audio"]
+        end
+
+        subgraph AUDIO_FX["Audio Production"]
+            E_SFX["text_to_sound_effects\nAmbient sounds for O Fim"]
+            E_MUSIC["compose_music\nBar atmosphere music"]
+            E_PLAN["create_composition_plan\nStructured music planning"]
+            E_ISOLATE["isolate_audio\nAudio separation"]
+            E_PLAY["play_audio\nPlayback"]
+        end
+
+        subgraph CONV_AI["Conversational AI Agents"]
+            E_AGENT["create_agent / get_agent\nAI-powered phone agents"]
+            E_CALL["make_outbound_call\nTwilio/SIP integration"]
+            E_CONVOS["list_conversations\nConversation history"]
+            E_KB["add_knowledge_base_to_agent\nAgent knowledge"]
+        end
+
+        E_STT["speech_to_text\nTranscription"]
+        E_VOICES["search_voices / get_voice\nVoice library"]
+        E_MODELS["list_models\nAvailable TTS models"]
+    end
+
+    %% ── MCP Server: Mermaid Chart (Visualization) ────────────────
+
+    subgraph MERMAID["MCP: Mermaid Chart -- Diagrams"]
+        direction TB
+        M_RENDER["validate_and_render_mermaid_diagram\nRender + validate"]
+        M_TITLE["get_diagram_title\nAuto-generate titles"]
+        M_SUMMARY["get_diagram_summary\nDiagram summaries"]
+    end
+
+    %% ── MCP Server: MCP Docker Hub (Orchestration) ──────────────
+
+    subgraph DOCKER_HUB["MCP: Docker Hub -- Orchestration & Utilities"]
+        direction TB
+
+        subgraph RECON["Network Reconnaissance"]
+            D_SHODAN["search_shodan\nDevice/service discovery"]
+            D_IOT["search_iot_devices\nIoT device search"]
+            D_SCAN["scan_network_range\nCIDR scanning"]
+            D_HOST["get_host_info\nIP analysis"]
+            D_SSL["get_ssl_info\nSSL certificate info"]
+        end
+
+        subgraph UTIL["Utilities"]
+            D_TIME["get_current_time / convert_time\nTimezone operations"]
+            D_SEARCH["web_search_exa\nReal-time web search"]
+            D_THINK["sequentialthinking\nStructured reasoning"]
+            D_CHECK["save/read_checkpoint\nState persistence"]
+        end
+
+        subgraph MCP_MGMT["MCP Management"]
+            D_CODE["code-mode\nMulti-server JS scripting"]
+            D_ADD["mcp-add / mcp-remove\nDynamic server management"]
+            D_FIND["mcp-find / mcp-exec\nServer discovery + execution"]
+            D_CONFIG["mcp-config-set\nServer configuration"]
+        end
+
+        D_EXCALI["export_to_excalidraw\nExcalidraw export"]
+        D_VIEW["create_view\nExcalidraw rendering"]
+    end
+
+    %% ── AEON Custom MCP Servers (from CLAUDE.md) ────────────────
+
+    subgraph AEON_MCP["AEON Custom MCP Servers -- Docker-hosted"]
+        direction TB
+        AEON_DB["aeon-db\nmcp-db-server\nPostgreSQL 16 + pgvector"]
+        AEON_COMPUTE["aeon-compute\nnode-code-sandbox-mcp\nJS execution sandbox"]
+    end
+
+    %% ── Database ─────────────────────────────────────────────────
+
+    subgraph DB["PostgreSQL: aeon_matrix"]
+        direction TB
+        T_PERSONAS["personas"]
+        T_USERS["users"]
+        T_INTERACTIONS["interactions"]
+        T_RELATIONSHIPS["relationships"]
+        T_MEMORIES["memories"]
+        T_SETTINGS["user_settings"]
+        T_LOGS["operator_logs"]
+    end
+
+    %% ── Personas / Soul Layer ────────────────────────────────────
+
+    SOULS["fa:fa-ghost Personas Soul Layer\n/personas/*.md\nSHA-256 protected"]
+
+    %% ============================================================
+    %% CONNECTIONS
+    %% ============================================================
+
+    %% User -> AEON workflows
+    USER --> SUMMON
+    USER --> SUMMON_MATRIX
+    USER --> COUNCIL
+    USER --> DIALECTIC
+    USER --> FAMILIA
+    USER --> HETERONYMS
+    USER --> SCRY
+    USER --> MAGICK
+    USER --> WAR
+    USER --> DRIFT
+    USER --> MATRIX_STATUS
+
+    %% AEON workflows -> Compute
+    SUMMON_MATRIX --> CTX
+    COUNCIL --> CTX
+    DIALECTIC --> CTX
+    DRIFT --> DRIFT_MOD
+    CTX --> REL
+    CTX --> MEM
+    CTX --> SOUL
+    CTX --> SETTING
+    CTX --> PYNCHON
+
+    %% Compute -> AEON Custom MCP
+    CTX -->|"SQL queries"| AEON_DB
+    DRIFT_MOD -->|"run_js_ephemeral"| AEON_COMPUTE
+    MEM -->|"SQL queries"| AEON_DB
+    REL -->|"SQL queries"| AEON_DB
+
+    %% AEON Custom MCP -> Database
+    AEON_DB -->|"DATABASE_URL"| DB
+
+    %% Compute -> Soul Layer
+    SOUL --> SOULS
+
+    %% Development workflows -> Serena
+    USER -.->|"Development\nCode editing"| SERENA
+
+    %% Development workflows -> Context7
+    USER -.->|"Library docs\nlookup"| CTX7
+
+    %% Voice/Audio capabilities
+    SUMMON -.->|"Voice output\n(optional)"| E_TTS
+    SUMMON_MATRIX -.->|"Voice output\n(optional)"| E_TTS
+    E_SFX -.->|"Bar ambiance"| AEON
+    E_MUSIC -.->|"Jukebox at O Fim"| AEON
+
+    %% Visualization
+    USER -.->|"Diagram\ncreation"| MERMAID
+    MERMAID -.->|"Export"| D_EXCALI
+
+    %% Docker Hub utilities
+    USER -.->|"Research &\nreconnaissance"| DOCKER_HUB
+
+    %% Styling
+    classDef aeonStyle fill:#1a1a2e,stroke:#e94560,stroke-width:2px,color:#e0e0e0
+    classDef mcpStyle fill:#0f3460,stroke:#00d2ff,stroke-width:2px,color:#e0e0e0
+    classDef computeStyle fill:#16213e,stroke:#e94560,stroke-width:1px,color:#e0e0e0
+    classDef dbStyle fill:#533483,stroke:#00d2ff,stroke-width:2px,color:#e0e0e0
+    classDef userStyle fill:#e94560,stroke:#fff,stroke-width:2px,color:#fff
+    classDef soulStyle fill:#2d1b4e,stroke:#e94560,stroke-width:2px,color:#e0e0e0
+
+    class USER userStyle
+    class AEON aeonStyle
+    class SERENA,CTX7,ELEVEN,MERMAID,DOCKER_HUB,AEON_MCP mcpStyle
+    class COMPUTE,PYNCHON computeStyle
+    class DB dbStyle
+    class SOULS soulStyle
