@@ -34,6 +34,7 @@ import { classifyMemoryElection, consignToPreterite } from './preterite-memory.j
 import { updateArc } from './narrative-gravity.js';
 import { validatePersonaName } from './persona-validator.js';
 import { CONTEXT_BUDGET } from './constants.js';
+import { purgeStaleSettings } from '../scripts/purge-settings.js';
 
 // Sub-orchestrator imports
 import {
@@ -68,6 +69,43 @@ import {
  */
 function getPool() {
   return getSharedPool();
+}
+
+// ===================================================================
+// Lazy Purge: Stale Settings Cleanup (Issue #28)
+// ===================================================================
+
+/** Interval between automatic purge runs (6 hours in ms). */
+const PURGE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+/** Timestamp of the last purge attempt. Starts at 0 to trigger on first eligible call. */
+let lastPurgeTime = 0;
+
+/**
+ * Fire-and-forget lazy purge of stale settings.
+ * Runs at most once every PURGE_INTERVAL_MS. Never throws or blocks the caller.
+ */
+function maybePurgeStaleSettings() {
+  const now = Date.now();
+  if (now - lastPurgeTime < PURGE_INTERVAL_MS) return;
+
+  lastPurgeTime = now;
+
+  // Fire-and-forget: no await, errors caught internally
+  purgeStaleSettings(getPool())
+    .then(result => {
+      if (result.success && result.deletedCount > 0) {
+        logOperation('lazy_purge_settings', {
+          details: {
+            deleted_count: result.deletedCount
+          },
+          success: true
+        }).catch(() => {});
+      }
+    })
+    .catch(() => {
+      // Silent failure — purge is non-critical
+    });
 }
 
 // Token budget imported from constants.js (CONTEXT_BUDGET)
@@ -269,6 +307,9 @@ export async function assembleContext(params) {
   if (personaSlug) {
     validatePersonaName(personaSlug);
   }
+
+  // Lazy purge: fire-and-forget cleanup of expired settings (Issue #28)
+  maybePurgeStaleSettings();
 
   try {
     // Step 0: Validate soul file integrity (Constitution Principle I)

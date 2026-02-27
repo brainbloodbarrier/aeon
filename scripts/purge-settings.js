@@ -3,28 +3,48 @@
  * Purge Stale Settings
  *
  * Removes user_settings records that haven't been updated in 90 days.
- * Run daily via cron to enforce data retention policy.
+ * Can be run standalone via CLI or imported for lazy purge in context-assembler.
  *
  * Feature: 005-setting-preservation
  *
- * Usage:
+ * Usage (standalone):
  *   node scripts/purge-settings.js
  *
- * Cron example (daily at 3 AM):
- *   0 3 * * * node /path/to/aeon/scripts/purge-settings.js
+ * Usage (imported):
+ *   import { purgeStaleSettings } from '../scripts/purge-settings.js';
+ *   await purgeStaleSettings(pool);
  */
 
 import pg from 'pg';
 
 const { Pool } = pg;
 
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  console.error('[PurgeSettings] DATABASE_URL environment variable is required');
-  process.exit(1);
+/**
+ * Purge user_settings records inactive for more than 90 days.
+ *
+ * @param {Object} pool - PostgreSQL pool instance (uses getSharedPool when imported)
+ * @returns {Promise<{success: boolean, deletedCount?: number, error?: string}>}
+ */
+export async function purgeStaleSettings(pool) {
+  try {
+    const result = await pool.query('SELECT purge_stale_settings() AS deleted_count');
+    const deletedCount = result.rows[0].deleted_count;
+    return { success: true, deletedCount };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 }
 
-async function purgeStaleSettings() {
+/**
+ * Standalone entry point with its own pool and verbose logging.
+ */
+async function runStandalone() {
+  const DATABASE_URL = process.env.DATABASE_URL;
+  if (!DATABASE_URL) {
+    console.error('[PurgeSettings] DATABASE_URL environment variable is required');
+    process.exit(1);
+  }
+
   const pool = new Pool({
     connectionString: DATABASE_URL,
     max: 1
@@ -33,10 +53,14 @@ async function purgeStaleSettings() {
   try {
     console.log('[PurgeSettings] Starting 90-day retention purge...');
 
-    const result = await pool.query('SELECT purge_stale_settings() AS deleted_count');
-    const deletedCount = result.rows[0].deleted_count;
+    const purgeResult = await purgeStaleSettings(pool);
 
-    console.log(`[PurgeSettings] Purged ${deletedCount} stale setting records`);
+    if (!purgeResult.success) {
+      console.error('[PurgeSettings] Error:', purgeResult.error);
+      return purgeResult;
+    }
+
+    console.log(`[PurgeSettings] Purged ${purgeResult.deletedCount} stale setting records`);
 
     // Log summary
     const stats = await pool.query(`
@@ -50,7 +74,7 @@ async function purgeStaleSettings() {
     const { total_settings, active_30d, active_60d } = stats.rows[0];
     console.log(`[PurgeSettings] Remaining: ${total_settings} total, ${active_30d} active (30d), ${active_60d} active (60d)`);
 
-    return { success: true, deletedCount };
+    return purgeResult;
   } catch (error) {
     console.error('[PurgeSettings] Error:', error.message);
     return { success: false, error: error.message };
@@ -59,12 +83,15 @@ async function purgeStaleSettings() {
   }
 }
 
-// Run if executed directly
-purgeStaleSettings()
-  .then(result => {
-    process.exit(result.success ? 0 : 1);
-  })
-  .catch(error => {
-    console.error('[PurgeSettings] Fatal error:', error);
-    process.exit(1);
-  });
+// Run if executed directly (ESM equivalent of require.main === module)
+const isMainModule = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'));
+if (isMainModule) {
+  runStandalone()
+    .then(result => {
+      process.exit(result.success ? 0 : 1);
+    })
+    .catch(error => {
+      console.error('[PurgeSettings] Fatal error:', error);
+      process.exit(1);
+    });
+}
