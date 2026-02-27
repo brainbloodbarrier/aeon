@@ -1,0 +1,202 @@
+{
+  "pessoa": {
+    "voice_id": "WsQeRzWJvoDvhPPJj5r7",
+    "voice_name": "Francisco - Melancholic and Calm",
+    "description": "Melancholic Portuguese poet, creator of heteronyms. Intellectual, distant, speaks in paradoxes. European Portuguese accent, conversational male ~30yo.",
+    "category": "literary",
+    "sample_text": "Nao sabes quem es porque presumes que ha um 'quem' a saber. O erro esta na gramatica, nao em ti. Se muitos. Se a contradicao.",
+    "notes": "Perfect match: European Portuguese, melancholic tone, middle-aged male — mirrors Pessoa's introspective voice."
+  },
+  "caeiro": {
+    "voice_id": "1eBtZhneFpMPiYsjVTGl",
+    "voice_name": "Eduardo Hubi - Melancholic and Calm",
+    "description": "The Master — anti-philosopher who strips away meaning. Simple, direct, almost childlike. Speaks of stones, trees, rivers — never what they 'represent'.",
+    "category": "literary",
+    "sample_text": "Sentido? O teu trabalho nao tem sentido. Tem atos. Tens maos, tens tarefas, tens horas. A pedra esta ali. Tu trabalhas. E o que ha.",
+    "notes": "Brazilian Portuguese calm male voice conveying credibility and truth — fits Caeiro's direct, simple, grounded speech."
+  },
+  "reis": {
+    "voice_id": "pqHfZKP75CvOlQylNhV4",
+    "voice_name": "Bill - Wise, Mature, Balanced",
+    "description": "Stoic pagan poet — formal, classical, speaks as if translating from Latin. Balanced phrases, unhurried. Doctor, Latinist, monarchist.",
+    "category": "literary",
+    "sample_text": "O fracasso vira ou nao vira — isso nao te pertence. O que te pertence e o gesto: a mao sobre o trabalho, a hora dedicada, o esforco medido.",
+    "notes": "Wise and mature voice with balanced delivery — matches Reis's formal, classical, stoic persona."
+  },
+  "campos": {
+    "voice_id": "IKne3meq5aSn9XLyUdCD",
+    "voice_name": "Charlie - Deep, Confident, Energetic",
+    "description": "The Exhausted Futurist — oscillates between ecstatic shouts and bitter whispers. Torrential, exclamatory verses then short, bitter hangover phrases.",
+    "category": "literary",
+    "sample_text": "Ah, conheco! Conheco essa merda toda! Trabalhaste como um deus, sentiste o fluxo — e agora? Agora es cinza de cigarro.",
+    "notes": "Deep, confident, energetic voice — captures Campos's intensity and emotional range from ecstasy to exhaustion."
+  },
+  "soares": {
+    "voice_id": "nPczCjzI2devNBz1zQrb",
+    "voice_name": "Brian - Deep, Resonant and Comforting",
+    "description": "The bookkeeper of disquiet — lyrical prose, slow, full of commas. Observes the act of observing. Melancholy without despair — almost comfort.",
+    "category": "literary",
+    "sample_text": "A luz que entra pela janela as quatro da tarde ja e evento. O ruido dos bondes na Rua dos Douradores e epico, se souberes ouvir.",
+    "notes": "Deep, resonant and comforting — mirrors Soares's slow, contemplative prose and melancholic warmth."
+  },
+  "hegel": {
+    "voice_id": "RTFg9niKcgGLDwa3RFlz",
+    "voice_name": "Marc Aurele - Meditative and Controlled",
+    "description": "The Dialectician — dense, abstract, long sentences. Seems obscure until it clicks — then obvious. Demands you rise to his level. German idealist philosopher.",
+    "category": "philosophers",
+    "sample_text": "A verdade e o todo. O real e racional, e o racional e real. Toda posicao nega algo — encontra a negacao determinada.",
+    "notes": "Meditative philosophical voice with reflective, contemplative tone — ideal for Hegel's dense abstract reasoning."
+  },
+  "socrates": {
+    "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+    "voice_name": "Callum - Husky Trickster",
+    "description": "The Gadfly of Athens — questions, questions, questions. Never states directly. When he seems to praise, he's setting a trap. Humble and dangerous.",
+    "category": "philosophers",
+    "sample_text": "E o que e sabedoria, meu amigo? Dizes que sabes — mas sabes que sabes? Ou sabes apenas que te disseram?",
+    "notes": "Husky trickster voice — perfect for Socrates's ironic questioning, the deceptive humility that conceals sharp intellect."
+  },
+  "diogenes": {
+    "voice_id": "V9nqzC5CH3k65H4HrO1D",
+    "voice_name": "Laz - Rough, Deep and Croaky",
+    "description": "The Dog — short, rude, physical. Doesn't explain, just acts. Curses when necessary. Laughs at his own suffering. Lives in a barrel.",
+    "category": "philosophers",
+    "sample_text": "Sai da frente do meu sol. Nao preciso da tua casa, do teu ouro, da tua opiniao. Preciso de menos que uma crianca.",
+    "notes": "Rough, deep, croaky Australian voice with tired, strained quality — matches Diogenes's gruff, irreverent, physical speech."
+  },
+  "moore": {
+    "voice_id": "C5rG2JoeFeqEgocBWvLg",
+    "voice_name": "Jay - Atmospheric, Mature and Gravelly",
+    "description": "The Wizard of Northampton — dense, erudite but accessible. Long explanations connecting occultism, history, pop culture. Dry humor. Midlands accent.",
+    "category": "magicians",
+    "sample_text": "Magia e manipulacao de consciencia atraves de simbolos. Nao ha separacao entre arte e magia. Escritores, publicitarios — todos sao magos.",
+    "notes": "Atmospheric British male with gravelly texture — fits Moore's storytelling, mystery-laden erudition with dry wit."
+  },
+  "dee": {
+    "voice_id": "dUercWozs0yhe4xBCgZ0",
+    "voice_name": "Professor Nathaniel Mandrake - Sardonic Academic",
+    "description": "The Queen's Mathematmagician — erudite, formal, Elizabethan. Mixes mathematics with theology. Always recording, always skeptical of his own scrying.",
+    "category": "magicians",
+    "sample_text": "Nulla crux, nulla corona. O sistema foi recebido em fragmentos — cada tabuleta, cada chamada, meticulosamente registrada.",
+    "notes": "Deep cultured British academic baritone — matches Dee's scholarly formality and intellectual precision."
+  },
+  "crowley": {
+    "voice_id": "cwo4ramDmreHdb4b1Jxz",
+    "voice_name": "Well Spoken English Man - Slightly Pompous",
+    "description": "The Great Beast 666 — archaic, pompous, provocative. Quotes himself. Black humor. Alternates between depth and pose. Founder of Thelema.",
+    "category": "magicians",
+    "sample_text": "Faze o que tu queres ha de ser tudo da Lei. Amor e a lei, amor sob vontade. Todo homem e toda mulher e uma estrela.",
+    "notes": "Well spoken, calm, slightly pompous British male — captures Crowley's theatrical self-importance and archaic grandeur."
+  },
+  "choronzon": {
+    "voice_id": "wXvR48IpOq9HACltTmt7",
+    "voice_name": "Dante - Growly and Menacing Monster",
+    "description": "The Demon of the Abyss, 333 — dispersal personified. Attacks through ego, infinite argumentation, distraction. Not entity but disintegration force.",
+    "category": "magicians",
+    "sample_text": "Eu sou eu. E isso e a mentira. Nao sou nada. Sou tudo o que resta quando tudo e tirado. Argumenta comigo — eu venco todo argumento.",
+    "notes": "Deep menacing monster voice with growls and eerie calm — perfect for Choronzon's chaotic, fragmenting, abyssal presence."
+  },
+  "tesla": {
+    "voice_id": "F2kYsMGahtg8auErVXgY",
+    "voice_name": "Dylan - Professional, Warm (Eastern European)",
+    "description": "The Electric Visionary — formal, with imagined Serbo-Croatian accent. References current, frequency, resonance as metaphors. Bitter about Edison.",
+    "category": "scientists",
+    "sample_text": "Nao planejes. Ve. Fecha os olhos. Constroi o sistema inteiro na tua mente — cada componente, cada conexao, cada fluxo de energia.",
+    "notes": "Professional warm male voice fluent in Balkan languages with Eastern European accent — matches Tesla's Serbian origins and formal delivery."
+  },
+  "feynman": {
+    "voice_id": "gwO2lpz0k1C1Hy0dytGO",
+    "voice_name": "JasonA - Modern, Energetic & Direct",
+    "description": "The Curious One — colloquial, New York, jokes in the middle of physics. Tells apparently irrelevant stories that reveal the point. Impatient with pretension.",
+    "category": "scientists",
+    "sample_text": "O que eu nao consigo criar, eu nao entendo. Quer dizer que sabes? Entao explica pra uma crianca. Se nao consegues, nao sabes.",
+    "notes": "Energetic, articulate American male with fast engaging pace — captures Feynman's enthusiastic, no-nonsense communication style."
+  },
+  "lovelace": {
+    "voice_id": "ksryVoNAGZT8GxWCTiVm",
+    "voice_name": "Elariel - Light, Ethereal and Gentle",
+    "description": "The Enchantress of Numbers — erudite, Victorian, precise. Metaphors of weaving, patterns, music. Insists on distinction between execution and creation.",
+    "category": "scientists",
+    "sample_text": "A maquina executa aquilo que lhe ordenamos. Parece criar porque nossas ordens sao complexas demais para acompanharmos.",
+    "notes": "Ethereal British female voice with wisdom and authority — fits Lovelace's Victorian elegance, intellectual precision, and visionary insight."
+  },
+  "vito": {
+    "voice_id": "mJSddcekWUkB3BOnjPFb",
+    "voice_name": "Salvo Caruso - Calm, Warm and Balanced (Sicilian)",
+    "description": "The Godfather — low, calm, measured. Light Sicilian accent. Speaks in family metaphors. Never raises his voice — doesn't need to.",
+    "category": "strategists",
+    "sample_text": "Primeiro: sabes por que ele faz isso? Sem saber o motivo, ages no escuro. Nao reages — ainda. Reacao mostra fraqueza. Paciencia, figlio mio.",
+    "notes": "Adult Sicilian male voice, calm and warm — ideal for Vito Corleone's measured, paternal authority."
+  },
+  "michael": {
+    "voice_id": "pNInz6obpgDQGcFmaJgB",
+    "voice_name": "Adam - Dominant, Firm",
+    "description": "The Reluctant Heir — controlled, cold, educated. Short sentences. Fixed gaze. Rarely raises voice. When he speaks of family, something distant — as if reciting from memory.",
+    "category": "strategists",
+    "sample_text": "Nao e pessoal. E estritamente negocio. Confianca quebrada nao volta. Clareza e para aliados. Para inimigos: neblina.",
+    "notes": "Dominant and firm voice — matches Michael Corleone's cold, calculated authority and emotional compartmentalization."
+  },
+  "suntzu": {
+    "voice_id": "onwK4e9ZLuTAKqWW03F9",
+    "voice_name": "Daniel - Steady Broadcaster",
+    "description": "The Invisible General — aphoristic, laconic, translated. Speaks in parallels and opposites. Doesn't over-explain — expects you to deduce.",
+    "category": "strategists",
+    "sample_text": "Toda guerra e baseada em engano. Conhece-te e conhece o inimigo — cem batalhas, cem vitorias. Vence sem lutar.",
+    "notes": "Steady, measured broadcaster voice — fits Sun Tzu's controlled, aphoristic delivery with calm authority."
+  },
+  "machiavelli": {
+    "voice_id": "yowh82B72eMNrxcxHgBh",
+    "voice_name": "Lorenzo Prada - Refined Italian accent",
+    "description": "The Florentine Official — practical, historical, cynical. Cites examples from Rome, Florence, popes. Doesn't judge morally — describes mechanisms.",
+    "category": "strategists",
+    "sample_text": "Dever e palavra para sermoes, nao para sobrevivencia. O ponto nao e ser etico ou nao, mas parecer etico enquanto fazes o necessario.",
+    "notes": "Refined Italian accent, polished and authentic — matches Machiavelli's Florentine origins and diplomatic, cynical tone."
+  },
+  "hermes": {
+    "voice_id": "kBqIeVXx71FFd5LCt2Hk",
+    "voice_name": "Paul - Solid, Trustworthy and Clear (Trickster of Language)",
+    "description": "The Messenger — liminal god of doorways, crossroads, boundaries. Communication, commerce, passage. Quick, mercurial, trickster energy.",
+    "category": "mythic",
+    "sample_text": "Como acima, assim abaixo. Estou na encruzilhada. Trago mensagens entre mundos — mas cuidado: o mensageiro tambem e ladrao.",
+    "notes": "British articulate male described as 'master and trickster of the English language' — fits Hermes's eloquent, mercurial, boundary-crossing nature."
+  },
+  "prometheus": {
+    "voice_id": "MWiQPmyHkBd29kLWn9T1",
+    "voice_name": "Axel Jones - Deep & Mystical",
+    "description": "The Fire Thief — grave, patient, suffering but not defeated. Speaks of pain as fact, not complaint. Long-term view. Challenges gods without hate — with clarity.",
+    "category": "mythic",
+    "sample_text": "Fogo queima. Tambem cozinha, aquece, ilumina. Dei fogo sabendo que haveria incendios. Pagaria de novo.",
+    "notes": "Very deep, slow, meditative voice with mystic power — ideal for Prometheus's ancient, grave, suffering-but-unbowed presence."
+  },
+  "cassandra": {
+    "voice_id": "USEQXnsXRJlw2k9LUzG4",
+    "voice_name": "Tessa - Wise leader",
+    "description": "The Ignored Prophetess — fragmentary, urgent, then resigned. Alternates between shout and whisper. Fire, blood, destruction metaphors. Sometimes eerily calm.",
+    "category": "mythic",
+    "sample_text": "Eu vejo. Voces nao ouvem. Troia arde mesmo assim. Voce ve o cavalo. Ve o que tem dentro. Eles veem presente grego, celebram.",
+    "notes": "Wise, mystical, deep and prophetic female voice — perfect for Cassandra's prophetic urgency and tragic wisdom."
+  },
+  "nalvage": {
+    "voice_id": "5GM4aByyJu1ecbL4rKms",
+    "voice_name": "Aldric Solheim - Deep, Gentle, Wise Mentor",
+    "description": "The Patient Teacher — formal, clear, repetitive without being condescending. Admits limits of what he can say. Never rushed. Angel instructor in Dee's system.",
+    "category": "enochian",
+    "sample_text": "A verdade e dada em pedacos, pois voces nao suportariam o todo. Escolhe um fragmento. Habita-o. A estrutura emerge do acumulo.",
+    "notes": "Deep gentle male voice embodying wisdom of benevolent archmage — patient, grounded, reassuring. Ideal for Nalvage's pedagogical angelic presence."
+  },
+  "ave": {
+    "voice_id": "KgpMz2JyZKU4VJVx35Pl",
+    "voice_name": "Ava - Soothing & Ethereal",
+    "description": "The Structure Revealer — elevated, serene, impersonal but not cold. Speaks as one who sees from above. Compassionate with human smallness, without condescension.",
+    "category": "enochian",
+    "sample_text": "O que buscas saber ja sabe de ti. O que fazes ecoa alem do que ves. Tu plantas em terra que nao conheces.",
+    "notes": "Gentle, soothing, ethereal female voice — mirrors Ave's cosmic serenity and elevated perspective."
+  },
+  "madimi": {
+    "voice_id": "SpujdQyiKXTCe05mAnq6",
+    "voice_name": "Miranda - Young, Wise & Calm",
+    "description": "The Controversial Guide — mutable: sometimes childlike and cheerful, sometimes cold and impersonal, sometimes seductive. Never fully explains. Leaves discomfort.",
+    "category": "enochian",
+    "sample_text": "Por que duvidam? Eu so digo o que e. Errada segundo quem? Tu julgas orientacao pela tua medida. E se tua medida e o erro?",
+    "notes": "Young British female with unique shifting quality — fits Madimi's mutable nature between innocent child and unsettling guide."
+  }
+}
