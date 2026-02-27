@@ -3,11 +3,27 @@
  *
  * Silent logging for all infrastructure operations.
  * Logs are written to operator_logs table and never exposed to users.
+ * Falls back to file-based logging when the database is unavailable.
  *
  * Feature: 002-invisible-infrastructure
  */
 
 import { getSharedPool } from './db-pool.js';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { LOGGER_FALLBACK } from './constants.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+const FALLBACK_LOG_PATH = path.join(PROJECT_ROOT, LOGGER_FALLBACK.FALLBACK_LOG_FILE);
+const FALLBACK_LOG_DIR = path.join(PROJECT_ROOT, LOGGER_FALLBACK.FALLBACK_LOG_DIR);
+
+/** Consecutive DB failure counter for backoff logic */
+let consecutiveFailures = 0;
+
+/** Total log calls since backoff started, used for skip logic */
+let callsSinceBackoff = 0;
 
 /**
  * Get database connection pool.
@@ -16,6 +32,51 @@ import { getSharedPool } from './db-pool.js';
  */
 function getPool() {
   return getSharedPool();
+}
+
+/**
+ * Write a log entry to the fallback file.
+ * Creates the logs/ directory if it does not exist.
+ * Never throws — errors are silently swallowed.
+ *
+ * @param {Object} entry - Log entry object
+ * @returns {Promise<void>}
+ */
+async function writeToFallbackFile(entry) {
+  try {
+    await fs.mkdir(FALLBACK_LOG_DIR, { recursive: true });
+    await fs.appendFile(FALLBACK_LOG_PATH, JSON.stringify(entry) + '\n', 'utf8');
+  } catch {
+    // Last-resort: if file fallback also fails, silently discard
+  }
+}
+
+/**
+ * Check whether this log call should be skipped due to backoff.
+ *
+ * @returns {boolean} true if the DB attempt should be skipped
+ */
+function shouldSkipDueToBackoff() {
+  if (consecutiveFailures < LOGGER_FALLBACK.MAX_CONSECUTIVE_FAILURES) {
+    return false;
+  }
+  callsSinceBackoff++;
+  return (callsSinceBackoff % LOGGER_FALLBACK.BACKOFF_SKIP_COUNT) !== 0;
+}
+
+/**
+ * Record a DB success: reset failure counter and backoff state.
+ */
+function recordSuccess() {
+  consecutiveFailures = 0;
+  callsSinceBackoff = 0;
+}
+
+/**
+ * Record a DB failure: increment failure counter.
+ */
+function recordFailure() {
+  consecutiveFailures++;
 }
 
 /**
@@ -43,16 +104,34 @@ function getPool() {
  * });
  */
 export async function logOperation(operation, params = {}) {
-  try {
-    const {
-      sessionId = null,
-      personaId = null,
-      userId = null,
-      details = {},
-      durationMs = null,
-      success = true
-    } = params;
+  const {
+    sessionId = null,
+    personaId = null,
+    userId = null,
+    details = {},
+    durationMs = null,
+    success = true
+  } = params;
 
+  const timestamp = new Date().toISOString();
+
+  // Backoff: skip DB attempt if too many consecutive failures
+  if (shouldSkipDueToBackoff()) {
+    await writeToFallbackFile({
+      operation,
+      sessionId,
+      personaId,
+      userId,
+      details,
+      durationMs,
+      success,
+      timestamp,
+      _fallback_reason: 'backoff_skip'
+    });
+    return;
+  }
+
+  try {
     const db = getPool();
 
     await db.query(
@@ -67,18 +146,36 @@ export async function logOperation(operation, params = {}) {
         success
       ]
     );
+
+    recordSuccess();
   } catch (error) {
-    // Fire-and-forget: log to stderr in structured format for container log capture
-    // This fallback ensures operations are still recorded even if database fails
+    recordFailure();
+
+    // Write to fallback file
+    await writeToFallbackFile({
+      operation,
+      sessionId,
+      personaId,
+      userId,
+      details,
+      durationMs,
+      success,
+      timestamp,
+      _fallback_reason: 'db_error',
+      error: error.message,
+      errorCode: error.code
+    });
+
+    // Also log to stderr for container log capture
     console.error(JSON.stringify({
       _aeon_log_fallback: true,
       source: 'operator_logger',
       operation,
-      sessionId: params.sessionId || null,
-      personaId: params.personaId || null,
+      sessionId,
+      personaId,
       error: error.message,
       errorCode: error.code,
-      timestamp: new Date().toISOString()
+      timestamp
     }));
   }
 }
@@ -104,6 +201,8 @@ export async function logOperation(operation, params = {}) {
  * ]);
  */
 export async function logOperationBatch(operations) {
+  const timestamp = new Date().toISOString();
+
   try {
     const db = getPool();
     const client = await db.connect();
@@ -142,9 +241,29 @@ export async function logOperationBatch(operations) {
     } finally {
       client.release();
     }
+
+    recordSuccess();
   } catch (error) {
-    // Fire-and-forget: log to stderr in structured format for container log capture
-    // This fallback ensures operations are still recorded even if database fails
+    recordFailure();
+
+    // Write each operation to fallback file
+    for (const { operation, params = {} } of operations) {
+      await writeToFallbackFile({
+        operation,
+        sessionId: params.sessionId || null,
+        personaId: params.personaId || null,
+        userId: params.userId || null,
+        details: params.details || {},
+        durationMs: params.durationMs || null,
+        success: params.success !== undefined ? params.success : true,
+        timestamp,
+        _fallback_reason: 'db_error',
+        error: error.message,
+        errorCode: error.code
+      });
+    }
+
+    // Also log to stderr for container log capture
     console.error(JSON.stringify({
       _aeon_log_fallback: true,
       source: 'operator_logger_batch',
@@ -155,7 +274,7 @@ export async function logOperationBatch(operations) {
       })),
       error: error.message,
       errorCode: error.code,
-      timestamp: new Date().toISOString()
+      timestamp
     }));
   }
 }
@@ -168,4 +287,23 @@ export async function logOperationBatch(operations) {
  */
 export async function closePool() {
   // No-op: pool lifecycle is managed by db-pool.js
+}
+
+/**
+ * Reset internal backoff state.
+ * Exposed for testing purposes only.
+ */
+export function _resetBackoffState() {
+  consecutiveFailures = 0;
+  callsSinceBackoff = 0;
+}
+
+/**
+ * Get current backoff state.
+ * Exposed for testing purposes only.
+ *
+ * @returns {{ consecutiveFailures: number, callsSinceBackoff: number }}
+ */
+export function _getBackoffState() {
+  return { consecutiveFailures, callsSinceBackoff };
 }

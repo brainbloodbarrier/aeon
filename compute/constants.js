@@ -560,6 +560,23 @@ export const SOUL_CACHE_TTL_MS = 60_000;
 export const SOUL_MIN_CONTENT_LENGTH = 100;
 
 // =============================================================================
+// Operator Logger Fallback (Fire-and-Forget Resilience)
+// =============================================================================
+
+/**
+ * Operator logger fallback configuration.
+ */
+export const LOGGER_FALLBACK = {
+  /** Number of consecutive DB failures before backoff kicks in */
+  MAX_CONSECUTIVE_FAILURES: 5,
+  /** When in backoff, only attempt DB every N log calls */
+  BACKOFF_SKIP_COUNT: 10,
+  /** Fallback log file path (relative to project root) */
+  FALLBACK_LOG_DIR: 'logs',
+  FALLBACK_LOG_FILE: 'logs/operator-fallback.log'
+};
+
+// =============================================================================
 // Ambient Generator
 // =============================================================================
 
