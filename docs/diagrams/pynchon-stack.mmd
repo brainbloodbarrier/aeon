@@ -1,0 +1,112 @@
+%%{ init: { 'theme': 'dark' } }%%
+flowchart TB
+    CA[/"context-assembler.js<br/>assembleContext()"/]
+
+    CA --> SO["setting-orchestrator.js<br/>Delegates all Pynchon safe*Fetch calls"]
+
+    subgraph PHASE1 ["Phase 1: Temporal Consciousness (~500 tokens)"]
+        direction TB
+
+        TA["temporal-awareness.js<br/>Time gaps and reflections<br/>Budget: 100 tokens"]
+        AG["ambient-generator.js<br/>Music, weather, micro-events<br/>Budget: 150 tokens"]
+        ET["entropy-tracker.js<br/>System decay and degradation<br/>Budget: 75 tokens"]
+        PM["preterite-memory.js<br/>Forgotten memories resurface<br/>Budget: 100 tokens<br/>(15% surface probability)"]
+        ZB["zone-boundary-detector.js<br/>Meta-awareness resistance<br/>Budget: 75 tokens"]
+
+        TA --- AG
+        AG --- ET
+        ET --- PM
+        PM --- ZB
+    end
+
+    subgraph PHASE2 ["Phase 2: They Awareness (~350 tokens)"]
+        direction TB
+
+        TH["they-awareness.js<br/>Paranoid undertones<br/>Budget: 100 tokens"]
+        CF["counterforce-tracker.js<br/>Resistance vs collaboration<br/>Budget: 75 tokens"]
+        NG["narrative-gravity.js<br/>Rocket parabola arc<br/>Budget: 75 tokens"]
+        IB["interface-bleed.js<br/>System artifacts leak through<br/>Budget: 100 tokens"]
+
+        TH --- CF
+        CF --- NG
+        NG --- IB
+    end
+
+    SO --> TA
+    SO --> TH
+
+    %% Data flow connections
+    ET -. "entropyLevel" .-> AG
+    ET -. "entropyLevel >= 0.5" .-> IB
+    NG -. "arc phase effects" .-> ET
+    PM -. "election status" .-> CA
+
+    subgraph TEMPORAL_STATES ["Temporal States (time-gap thresholds)"]
+        direction LR
+        TS1["BRIEF: 30min"]
+        TS2["NOTABLE: 2h"]
+        TS3["SIGNIFICANT: 8h"]
+        TS4["MAJOR: 24h"]
+        TS5["EXTENDED: 7d"]
+    end
+
+    subgraph ENTROPY_STATES ["Entropy States (level thresholds)"]
+        direction LR
+        ES1["STABLE: < 0.3"]
+        ES2["UNSETTLED: < 0.5"]
+        ES3["DECAYING: < 0.7"]
+        ES4["FRAGMENTING: < 0.9"]
+        ES5["DISSOLVING: >= 0.9"]
+    end
+
+    subgraph ARC_PHASES ["Narrative Arc (momentum thresholds)"]
+        direction LR
+        AP1["RISING: m >= 0.5"]
+        AP2["APEX: m >= 0.7"]
+        AP3["FALLING: 0.2 <= m < 0.5"]
+        AP4["IMPACT: m < 0.2"]
+    end
+
+    subgraph AWARENESS ["They Awareness States"]
+        direction LR
+        AW1["OBLIVIOUS: < 0.2"]
+        AW2["UNEASY: < 0.4"]
+        AW3["SUSPICIOUS: < 0.6"]
+        AW4["PARANOID: < 0.8"]
+        AW5["AWAKENED: >= 0.95"]
+    end
+
+    TA -.-> TEMPORAL_STATES
+    ET -.-> ENTROPY_STATES
+    NG -.-> ARC_PHASES
+    TH -.-> AWARENESS
+
+    subgraph BLEED_TYPES ["Interface Bleed Types"]
+        direction LR
+        BT1["timestamp"]
+        BT2["error_fragment"]
+        BT3["log_leak"]
+        BT4["memory_address"]
+        BT5["query_echo"]
+        BT6["process_id"]
+    end
+
+    IB -.-> BLEED_TYPES
+
+    subgraph ALIGNMENTS ["Counterforce Alignments"]
+        direction LR
+        AL1["counterforce<br/>(score >= 0.5)"]
+        AL2["neutral<br/>(-0.3 < score < 0.5)"]
+        AL3["collaborator<br/>(score <= -0.3)"]
+    end
+
+    CF -.-> ALIGNMENTS
+
+    style PHASE1 fill:#16213e,color:#fff
+    style PHASE2 fill:#0f3460,color:#fff
+    style TEMPORAL_STATES fill:#1a1a2e,color:#fff
+    style ENTROPY_STATES fill:#1a1a2e,color:#fff
+    style ARC_PHASES fill:#1a1a2e,color:#fff
+    style AWARENESS fill:#1a1a2e,color:#fff
+    style BLEED_TYPES fill:#1a1a2e,color:#fff
+    style ALIGNMENTS fill:#1a1a2e,color:#fff

@@ -1,0 +1,67 @@
+%%{ init: { 'theme': 'dark' } }%%
+flowchart TD
+    A[/"Persona Invocation<br/>(personaId, userId, query, sessionId)"/] --> B{Soul Validation<br/>validateSoulCached}
+    B -- "tampered" --> FAIL["Return empty context<br/>soulIntegrityFailure: true"]
+    B -- "valid / skipped" --> C
+
+    subgraph CORE ["Core Pipeline (token-budgeted)"]
+        C["Relationship Fetch<br/>ensureRelationship"] -->|"safe*Fetch -> null on error"| D["Memory Retrieval<br/>safeMemoryRetrieval"]
+        D --> E["Memory Framing<br/>frameMemories"]
+        E --> F["Behavioral Hints<br/>generateBehavioralHints"]
+        F --> G{"previousResponse<br/>exists?"}
+        G -- "yes" --> H["Drift Pipeline<br/>safeDriftFetch"]
+        G -- "no" --> I["Setting Compilation<br/>compileUserSetting"]
+        H --> I
+        I --> J["Persona Relations<br/>safePersonaRelationsFetch"]
+        J --> K["Persona Memories<br/>safePersonaMemoriesFetch"]
+    end
+
+    K --> L["Temporal Context<br/>safeTemporalFetch"]
+
+    subgraph P1 ["Pynchon Phase 1 - Temporal Consciousness"]
+        L --> M["Ambient Details<br/>safeAmbientFetch"]
+        M --> N["Entropy Effects<br/>safeEntropyFetch"]
+        N --> O["Preterite Surfacing<br/>safePreteriteFetch<br/>(15% chance)"]
+        O --> P["Zone Boundary<br/>safeZoneDetection"]
+    end
+
+    subgraph P2 ["Pynchon Phase 2 - They Awareness"]
+        P --> Q["They Awareness<br/>safeTheyAwarenessFetch"]
+        Q --> R["Counterforce<br/>safeCounterforceFetch"]
+        R --> S["Narrative Gravity<br/>safeNarrativeGravityFetch"]
+        S --> T["Interface Bleed<br/>safeInterfaceBleedFetch<br/>(entropy >= 0.5)"]
+    end
+
+    T --> U["Token Budget Assembly"]
+
+    subgraph BUDGET ["Token Budgets (max 3000)"]
+        U --> U1["Soul Markers: 500"]
+        U --> U2["Relationship: 200"]
+        U --> U3["Memories: 800"]
+        U --> U4["Drift Correction: 100"]
+        U --> U5["Setting: 100"]
+        U --> U6["Persona Relations: 100"]
+        U --> U7["Persona Memories: 100"]
+        U --> U8["Temporal: 100"]
+        U --> U9["Ambient: 150"]
+        U --> U10["Entropy: 75"]
+        U --> U11["Preterite: 100"]
+        U --> U12["Zone: 75"]
+        U --> U13["They Awareness: 100"]
+        U --> U14["Counterforce: 75"]
+        U --> U15["Narrative Gravity: 75"]
+        U --> U16["Interface Bleed: 100"]
+        U --> U17["Buffer: 150"]
+    end
+
+    U1 & U2 & U3 & U4 & U5 & U6 & U7 & U8 & U9 & U10 & U11 & U12 & U13 & U14 & U15 & U16 & U17 --> V{"Memories exceed<br/>remaining budget?"}
+    V -- "yes" --> W["truncateMemories"]
+    V -- "no" --> X
+    W --> X["Assemble systemPrompt<br/>(ordered parts.join)"]
+    X --> Y[/"Assembled Context<br/>{systemPrompt, components, metadata}"/]
+
+    style FAIL fill:#8b0000,color:#fff
+    style CORE fill:#1a1a2e,color:#fff
+    style P1 fill:#16213e,color:#fff
+    style P2 fill:#0f3460,color:#fff
+    style BUDGET fill:#1a1a2e,color:#fff

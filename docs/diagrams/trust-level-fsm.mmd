@@ -1,0 +1,55 @@
+%%{ init: { 'theme': 'dark' } }%%
+stateDiagram-v2
+    [*] --> STRANGER : New relationship created
+
+    STRANGER --> ACQUAINTANCE : familiarity >= 0.2
+    ACQUAINTANCE --> FAMILIAR : familiarity >= 0.5
+    FAMILIAR --> CONFIDANT : familiarity >= 0.8
+
+    CONFIDANT --> FAMILIAR : familiarity drops below 0.8
+    FAMILIAR --> ACQUAINTANCE : familiarity drops below 0.5
+    ACQUAINTANCE --> STRANGER : familiarity drops below 0.2
+
+    state STRANGER {
+        [*] --> s1 : score in [0.0, 0.2)
+        s1 : Default trust level
+        s1 : Minimal behavioral hints
+        s1 : No memories shared
+    }
+
+    state ACQUAINTANCE {
+        [*] --> a1 : score in [0.2, 0.5)
+        a1 : Recognition begins
+        a1 : Basic behavioral hints
+        a1 : Some memories surfaced
+    }
+
+    state FAMILIAR {
+        [*] --> f1 : score in [0.5, 0.8)
+        f1 : Established rapport
+        f1 : Rich behavioral hints
+        f1 : Deep memories shared
+    }
+
+    state CONFIDANT {
+        [*] --> c1 : score in [0.8, 1.0]
+        c1 : Full trust achieved
+        c1 : Intimate behavioral hints
+        c1 : All memories accessible
+    }
+
+    note right of STRANGER
+        Familiarity delta per session:
+        baseDelta = 0.02
+        maxDelta = 0.05
+        delta = baseDelta * engagementScore
+        engagementScore range: [0.5, 2.0]
+    end note
+
+    note right of CONFIDANT
+        Engagement factors:
+        messageCount * 0.1
+        duration(min) * 0.2
+        followUps: +0.5
+        topicDepth * 0.3 (max 0.9)
+    end note

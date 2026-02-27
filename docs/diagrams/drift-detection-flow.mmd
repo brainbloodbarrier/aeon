@@ -1,0 +1,79 @@
+%%{ init: { 'theme': 'dark' } }%%
+sequenceDiagram
+    participant CA as context-assembler
+    participant DO as drift-orchestrator
+    participant DA as drift-analyzer
+    participant SME as soul-marker-extractor
+    participant SV as soul-validator
+    participant DC as drift-correction
+    participant OL as operator-logger
+
+    Note over CA: Step 0: Soul Validation
+    CA->>DO: safeSoulValidation(personaSlug, sessionId)
+    DO->>SV: validateSoulCached(personaSlug)
+    SV-->>DO: {valid, errors, metadata}
+
+    alt Soul Tampered
+        DO-->>CA: false
+        CA->>OL: logOperation('soul_validation_failure')
+        Note over CA: Return empty context<br/>soulIntegrityFailure: true
+    else Soul Valid
+        DO-->>CA: true
+    end
+
+    Note over CA: Step 4: Drift Detection<br/>(only if previousResponse exists)
+    CA->>DO: safeDriftFetch(response, personaId, slug, sessionId)
+
+    DO->>SME: loadPersonaMarkers(personaSlug)
+    SME-->>DO: markers {forbidden, vocabulary, patterns}
+
+    DO->>DA: analyzeDrift(response, personaId, sessionId)
+
+    Note over DA: Check 1: Response length >= 10
+    Note over DA: Check 2: shouldAnalyzeDrift(personaId)
+
+    DA->>SME: loadPersonaMarkers(personaId)
+    SME-->>DA: markers
+
+    Note over DA: detectDrift(response, markers)
+
+    rect rgb(80, 20, 20)
+        Note over DA: Forbidden phrases: +0.3 each
+        Note over DA: Generic AI phrases: +0.15 each
+        Note over DA: Pattern violations: +0.1 each
+        Note over DA: Low vocabulary (<30%): up to +0.15
+    end
+
+    Note over DA: classifySeverity(driftScore, threshold)
+
+    rect rgb(20, 60, 20)
+        Note over DA: STABLE: score <= 0.1
+        Note over DA: MINOR: 0.1 < score <= 0.3
+        Note over DA: WARNING: 0.3 < score <= 0.5
+        Note over DA: CRITICAL: score > 0.5
+    end
+
+    DA->>OL: logOperation('drift_detection', {score, severity})
+
+    alt severity >= WARNING
+        DA->>DA: createDriftAlert(personaId, score)
+    end
+
+    DA-->>DO: analysis {driftScore, severity, warnings}
+
+    DO->>DC: generateDriftCorrection(analysis, slug, markers, sessionId)
+
+    alt severity = STABLE
+        DC-->>DO: null (no correction needed)
+    else severity = MINOR
+        DC-->>DO: gentle correction
+    else severity = WARNING
+        DC-->>DO: firm correction
+    else severity = CRITICAL
+        DC-->>DO: strong correction
+    end
+
+    DO->>OL: logOperation('drift_pipeline', {score, severity, correction})
+    DO-->>CA: {correction, score}
+
+    Note over CA: Inject correction into<br/>context budget (100 tokens)
