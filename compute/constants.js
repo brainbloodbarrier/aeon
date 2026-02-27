@@ -589,3 +589,25 @@ export const AMBIENT_CONFIG = {
   LOW_ENTROPY_MICRO_EVENTS: 2,
   HIGH_ENTROPY_THRESHOLD: 0.5
 };
+
+// =============================================================================
+// Semantic Search (Memory Retrieval)
+// =============================================================================
+
+/**
+ * Semantic search configuration for memory retrieval.
+ */
+export const SEMANTIC_SEARCH = {
+  /** Default maximum results returned by semantic search */
+  DEFAULT_LIMIT: 10,
+  /** Minimum cosine similarity threshold (0-1, where 1 = identical) */
+  MIN_SIMILARITY: 0.3,
+  /** Weight for semantic similarity in hybrid scoring */
+  SEMANTIC_WEIGHT: 0.6,
+  /** Weight for importance score in hybrid scoring */
+  IMPORTANCE_WEIGHT: 0.4,
+  /** Embedding model identifier */
+  EMBEDDING_MODEL: 'text-embedding-3-small',
+  /** Embedding vector dimensions */
+  EMBEDDING_DIMENSIONS: 1536
+};
