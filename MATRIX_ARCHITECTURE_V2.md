@@ -179,12 +179,6 @@ services:
       - graph  # Only with --profile graph
 
   # ═══════════════════════════════════════════════════
-  # MCP SERVERS (run via Claude Desktop config)
-  # These are configured in claude_desktop_config.json
-  # Not as Docker services - they run as MCP servers
-  # ═══════════════════════════════════════════════════
-
-  # ═══════════════════════════════════════════════════
   # SOUL LAYER (mounted read-only)
   # Accessed via local filesystem, not containerized
   # ═══════════════════════════════════════════════════
@@ -202,39 +196,14 @@ networks:
 
 ---
 
-## MCP Server Configuration
+## Setup
 
-Add these to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "aeon-db": {
-      "command": "npx",
-      "args": ["-y", "@anthropic/mcp-db-server"],
-      "env": {
-        "DATABASE_URL": "postgres://architect:matrix_secret@localhost:5432/aeon_matrix"
-      }
-    },
-    "aeon-compute": {
-      "command": "npx",
-      "args": ["-y", "@anthropic/node-sandbox-mcp"],
-      "env": {
-        "SANDBOX_TIMEOUT": "30000"
-      }
-    },
-    "aeon-graph": {
-      "command": "npx",
-      "args": ["-y", "@neo4j/mcp-neo4j"],
-      "env": {
-        "NEO4J_URI": "bolt://localhost:7687",
-        "NEO4J_USER": "neo4j",
-        "NEO4J_PASSWORD": "matrix_graph"
-      }
-    }
-  }
-}
+```bash
+# Full automated setup
+./scripts/setup.sh
 ```
+
+This starts Docker, applies all migrations (002-015), and verifies all 25 personas are operational. Compute modules run directly on the host via Node.js — Docker only provides the storage layer.
 
 ---
 

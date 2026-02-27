@@ -1,9 +1,10 @@
-# AEON Matrix - Docker Composition (V2 - MCP Native)
+# AEON Matrix - Docker Composition
 #
-# This runs ONLY the storage layer. MCP servers are configured
-# separately in Claude Desktop's config.
+# Storage layer: PostgreSQL + pgvector (and optional Neo4j).
+# Compute modules run directly on host via Node.js.
 #
 # Usage:
+#   ./scripts/setup.sh                      # Full setup (recommended)
 #   docker compose up -d                    # PostgreSQL only
 #   docker compose --profile graph up -d    # PostgreSQL + Neo4j
 
@@ -108,30 +109,6 @@ services:
           memory: 512M
           cpus: '1.0'
     command: ["tail", "-f", "/dev/null"]  # Keep container running for MCP access
-
-  # ═══════════════════════════════════════════════════════════════
-  # NOTE: MCP Servers are NOT Docker services
-  # They run via Claude Desktop configuration (see below)
-  # ═══════════════════════════════════════════════════════════════
-  #
-  # Configure these in your Claude Desktop config:
-  # ~/Library/Application Support/Claude/claude_desktop_config.json
-  #
-  # {
-  #   "mcpServers": {
-  #     "aeon-db": {
-  #       "command": "npx",
-  #       "args": ["-y", "mcp-db-server"],
-  #       "env": {
-  #         "DATABASE_URL": "postgres://architect:matrix_secret@localhost:5432/aeon_matrix"
-  #       }
-  #     },
-  #     "aeon-compute": {
-  #       "command": "npx",
-  #       "args": ["-y", "node-code-sandbox-mcp"]
-  #     }
-  #   }
-  # }
 
 volumes:
   aeon_memory:

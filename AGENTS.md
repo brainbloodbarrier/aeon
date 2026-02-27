@@ -91,27 +91,6 @@ cp .env.example .env
 # Optional: NEO4J_PASSWORD, OPENAI_API_KEY
 ```
 
-### Claude Desktop Configuration
-Configure MCP servers in `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "aeon-db": {
-      "command": "npx",
-      "args": ["-y", "mcp-db-server"],
-      "env": {
-        "DATABASE_URL": "postgres://architect:matrix_secret@localhost:5432/aeon_matrix"
-      }
-    },
-    "aeon-compute": {
-      "command": "npx",
-      "args": ["-y", "node-code-sandbox-mcp"]
-    }
-  }
-}
-```
-
 ## Usage Commands
 
 ### Slash Commands (Workflows)
@@ -206,10 +185,9 @@ All `safe*Fetch` functions in `context-assembler.js` must catch errors and retur
 ## Deployment Process
 
 1. Configure environment variables in `.env`
-2. Start infrastructure with `docker compose up -d`
-3. Configure Claude Desktop with MCP servers
-4. Test with `/matrix-status` command
-5. Invoke personas with slash commands or skills
+2. Run `./scripts/setup.sh` (starts Docker + applies migrations + verifies personas)
+3. Test with `/matrix-status` command
+4. Invoke personas with slash commands or skills
 
 ## Key Files
 

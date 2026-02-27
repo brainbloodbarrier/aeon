@@ -209,13 +209,11 @@ Additional compute modules implementing paranoid realism in two phases:
 
 Core tables: `personas`, `users`, `conversations`, `interactions`, `relationships`, `memories`, `operator_logs`, `context_templates`, `user_settings`.
 
-Migrations in `db/migrations/` (002, 006, 008–010). Init schema in `db/init/001_schema.sql`.
+Migrations in `db/migrations/` (002, 006, 008–015). Init schema in `db/init/001_schema.sql`. Run `scripts/setup.sh` for full automated setup (Docker + migrations + verification).
 
 ### MCP Integration
 
-MCP servers run outside Docker, configured in Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-- `aeon-db` → `mcp-db-server` with `DATABASE_URL`
-- `aeon-compute` → `node-code-sandbox-mcp`
+MCP tools are configured via Claude Code settings (`.claude/settings.json`), not Docker. The compute modules in `compute/` run directly on the host via Node.js — Docker only provides the storage layer (PostgreSQL + pgvector).
 
 ---
 
