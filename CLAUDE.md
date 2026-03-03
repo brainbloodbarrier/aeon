@@ -102,7 +102,7 @@ Session completion (`completeSession()`) handles: memory extraction → familiar
 
 ### Compute Module Pipelines
 
-All 37 modules in `compute/` are organized into functional pipelines:
+The modules in `compute/` are organized into functional pipelines:
 
 - **Context pipeline:** `context-assembler.js` (entry point) → `soul-marker-extractor.js` → `relationship-shaper.js` → `memory-framing.js` → `drift-correction.js` → `setting-preserver.js`
 - **Drift pipeline:** `drift-orchestrator.js` → `drift-analyzer.js` → `drift-detection.js` → `drift-correction.js` → `drift-dashboard.js`

@@ -109,7 +109,7 @@ export const ENGAGEMENT_MULTIPLIERS = {
 };
 
 // =============================================================================
-// Persona Relationships (Constitution Principle VI)
+// Persona Relationships (Persona Autonomy)
 // =============================================================================
 
 /**
@@ -363,7 +363,7 @@ export const PHASE_EFFECTS = {
 export const IMPACT_RECOVERY_LIMIT = 0.02;
 
 // =============================================================================
-// Temporal Awareness (Constitution Principle VII)
+// Temporal Awareness (Temporal Consciousness)
 // =============================================================================
 
 /**
@@ -610,11 +610,11 @@ export const AMBIENT_CONFIG = {
 export const SEMANTIC_SEARCH = {
   /** Default maximum results returned by semantic search */
   DEFAULT_LIMIT: 10,
-  /** Minimum cosine similarity threshold (0-1, where 1 = identical) */
+  /** @deprecated Replaced by RRF ranking — kept for potential rollback */
   MIN_SIMILARITY: 0.3,
-  /** Weight for semantic similarity in hybrid scoring */
+  /** @deprecated Replaced by RRF_CONFIG — kept for potential rollback */
   SEMANTIC_WEIGHT: 0.6,
-  /** Weight for importance score in hybrid scoring */
+  /** @deprecated Replaced by RRF_CONFIG — kept for potential rollback */
   IMPORTANCE_WEIGHT: 0.4,
 };
 

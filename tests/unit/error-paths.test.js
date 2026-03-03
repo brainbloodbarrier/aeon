@@ -31,12 +31,17 @@ const mockPool = {
   end: jest.fn()
 };
 
+const mockClientQuery = jest.fn();
+const mockClientRelease = jest.fn();
+const mockClient = { query: mockClientQuery, release: mockClientRelease };
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ESM-compatible module mocking — ALL mocks BEFORE any dynamic imports
 // ═══════════════════════════════════════════════════════════════════════════
 
 jest.unstable_mockModule('../../compute/db-pool.js', () => ({
   getSharedPool: jest.fn(() => mockPool),
+  getClient: jest.fn().mockResolvedValue(mockClient),
   withTransaction: jest.fn(async (callback) => callback(mockPool))
 }));
 
@@ -239,6 +244,8 @@ describe('Cross-module error paths', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    mockClientQuery.mockReset();
+    mockClientRelease.mockReset();
   });
 
   // ═════════════════════════════════════════════════════════════════════════
@@ -313,21 +320,21 @@ describe('Cross-module error paths', () => {
       it('falls back to importance query when hybrid returns empty rows', async () => {
         const fakeEmbed = Array(384).fill(0.01);
         mockGenerateEmbedding.mockResolvedValueOnce(fakeEmbed);
-        // withHnswConfig transaction wrapper: BEGIN, SET LOCAL, RRF query, COMMIT
-        mockQuery
+        // withHnswConfig uses getClient — transaction on mockClientQuery
+        mockClientQuery
           .mockResolvedValueOnce(undefined)              // BEGIN
           .mockResolvedValueOnce(undefined)              // SET LOCAL hnsw.iterative_scan
           .mockResolvedValueOnce({ rows: [] })           // RRF query returns empty
           .mockResolvedValueOnce(undefined);             // COMMIT
-        // Fallback importance+recency query returns data
+        // Fallback importance+recency query uses pool.query (mockQuery)
         const fallbackRows = [{ id: 'm2', content: 'fallback', importance_score: 0.7 }];
         mockQuery.mockResolvedValueOnce({ rows: fallbackRows });
 
         const result = await safeMemoryRetrieval('p1', 'u1', 'query', 's1');
 
         expect(result).toEqual(fallbackRows);
-        // BEGIN + SET LOCAL + RRF + COMMIT + fallback = 5
-        expect(mockQuery).toHaveBeenCalledTimes(5);
+        expect(mockClientQuery).toHaveBeenCalledTimes(4);
+        expect(mockQuery).toHaveBeenCalledTimes(1);
       });
 
       it('returns empty array when embedding generation throws', async () => {

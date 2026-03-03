@@ -15,8 +15,13 @@ const mockPool = {
   end: jest.fn()
 };
 
+const mockClientQuery = jest.fn();
+const mockRelease = jest.fn();
+const mockClient = { query: mockClientQuery, release: mockRelease };
+
 jest.unstable_mockModule('../../compute/db-pool.js', () => ({
-  getSharedPool: jest.fn(() => mockPool)
+  getSharedPool: jest.fn(() => mockPool),
+  getClient: jest.fn().mockResolvedValue(mockClient)
 }));
 
 jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
@@ -39,13 +44,13 @@ const { logOperation } = await import('../../compute/operator-logger.js');
 const FAKE_EMBEDDING = Array(384).fill(0.01);
 
 /**
- * Setup mockQuery responses for withHnswConfig transaction wrapper.
- * When hybridMemorySearch has an embedding, it wraps the query in:
- *   BEGIN -> SET LOCAL hnsw.iterative_scan -> actual query -> COMMIT
- * When no embedding, importance fallback runs without wrapper.
+ * Setup mockClientQuery responses for withHnswConfig transaction wrapper.
+ * withHnswConfig uses getClient() (not pool.query), so BEGIN/SET LOCAL/
+ * query/COMMIT all go through the same mockClientQuery.
+ * Non-transaction queries (fallback) still use mockQuery (pool.query).
  */
 function setupHnswMocks(searchRows) {
-  mockQuery
+  mockClientQuery
     .mockResolvedValueOnce(undefined)  // BEGIN
     .mockResolvedValueOnce(undefined)  // SET LOCAL hnsw.iterative_scan
     .mockResolvedValueOnce({ rows: searchRows })  // actual search query
@@ -99,6 +104,8 @@ const MOCK_TEXT_ROWS = [
 describe('Memory Retrieval — RRF Hybrid Search', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockClientQuery.mockReset();
+    mockRelease.mockReset();
   });
 
   // ═════════════════════════════════════════════════════════════════════════
@@ -115,8 +122,8 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
       expect(result.rows).toHaveLength(2);
       expect(result.rows[0].id).toBe('mem-1');
 
-      // calls[0]=BEGIN, calls[1]=SET LOCAL, calls[2]=RRF query, calls[3]=COMMIT
-      const sql = mockQuery.mock.calls[2][0];
+      // client calls: [0]=BEGIN, [1]=SET LOCAL, [2]=RRF query, [3]=COMMIT
+      const sql = mockClientQuery.mock.calls[2][0];
       expect(sql).toContain('vector_search');
       expect(sql).toContain('importance_search');
       expect(sql).toContain('FULL OUTER JOIN');
@@ -124,6 +131,8 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
       // Verify bare ORDER BY for HNSW index usage
       expect(sql).toContain('ORDER BY embedding <=> $3::vector');
       expect(sql).toContain('ORDER BY importance_score DESC, created_at DESC');
+      // Verify client is released after transaction
+      expect(mockRelease).toHaveBeenCalled();
     });
 
     it('should set hnsw.iterative_scan before search query', async () => {
@@ -131,9 +140,9 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
 
       await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING);
 
-      expect(mockQuery.mock.calls[0][0]).toBe('BEGIN');
-      expect(mockQuery.mock.calls[1][0]).toContain('hnsw.iterative_scan');
-      expect(mockQuery.mock.calls[3][0]).toBe('COMMIT');
+      expect(mockClientQuery.mock.calls[0][0]).toBe('BEGIN');
+      expect(mockClientQuery.mock.calls[1][0]).toContain('hnsw.iterative_scan');
+      expect(mockClientQuery.mock.calls[3][0]).toBe('COMMIT');
     });
 
     it('should pass personaId, userId, and embedding as query params', async () => {
@@ -141,8 +150,8 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
 
       await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING);
 
-      // RRF query is at index 2
-      const params = mockQuery.mock.calls[2][1];
+      // RRF query is at index 2 on the client
+      const params = mockClientQuery.mock.calls[2][1];
       expect(params[0]).toBe('persona-1');
       expect(params[1]).toBe('user-1');
       expect(params[2]).toBe(JSON.stringify(FAKE_EMBEDDING));
@@ -163,17 +172,18 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
     });
 
     it('should fall back to importance+recency when RRF returns empty rows', async () => {
-      // withHnswConfig: BEGIN, SET LOCAL, RRF (empty), COMMIT
+      // withHnswConfig on client: BEGIN, SET LOCAL, RRF (empty), COMMIT
       setupHnswMocks([]);
-      // Then importance fallback (outside transaction)
+      // Then importance fallback (on pool, outside transaction)
       mockQuery.mockResolvedValueOnce({ rows: MOCK_IMPORTANCE_ROWS });
 
       const result = await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING);
 
       expect(result.strategy).toBe('rrf_fallback_to_importance');
       expect(result.rows).toHaveLength(1);
-      // 4 from withHnswConfig + 1 from fallback
-      expect(mockQuery).toHaveBeenCalledTimes(5);
+      // 4 client calls (BEGIN, SET LOCAL, RRF, COMMIT) + 1 pool call (fallback)
+      expect(mockClientQuery).toHaveBeenCalledTimes(4);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
     });
 
     it('should respect custom limit option', async () => {
@@ -181,7 +191,7 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
 
       await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING, { limit: 5 });
 
-      const sql = mockQuery.mock.calls[2][0];
+      const sql = mockClientQuery.mock.calls[2][0];
       // Final LIMIT should be 5
       expect(sql).toMatch(/ORDER BY rrf_score DESC\s+LIMIT 5/);
       // Over-fetch should be 5 * 2 = 10
@@ -193,7 +203,7 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
 
       await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING, { rrf_k: 30 });
 
-      const sql = mockQuery.mock.calls[2][0];
+      const sql = mockClientQuery.mock.calls[2][0];
       expect(sql).toContain('1.0 / (30 + v.rank)');
       expect(sql).toContain('1.0 / (30 + i.rank)');
     });
@@ -206,13 +216,13 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
         overFetchMultiplier: 3
       });
 
-      const sql = mockQuery.mock.calls[2][0];
+      const sql = mockClientQuery.mock.calls[2][0];
       // Over-fetch: 10 * 3 = 30
       expect(sql).toMatch(/LIMIT 30\s/);
     });
 
     it('should ROLLBACK on query error inside withHnswConfig', async () => {
-      mockQuery
+      mockClientQuery
         .mockResolvedValueOnce(undefined)  // BEGIN
         .mockResolvedValueOnce(undefined)  // SET LOCAL
         .mockRejectedValueOnce(new Error('query failed'))  // RRF query fails
@@ -220,7 +230,8 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
 
       await expect(hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING))
         .rejects.toThrow('query failed');
-      expect(mockQuery.mock.calls[3][0]).toBe('ROLLBACK');
+      expect(mockClientQuery.mock.calls[3][0]).toBe('ROLLBACK');
+      expect(mockRelease).toHaveBeenCalled();
     });
 
     it('should return empty rows with fallback strategy when both RRF and fallback return empty', async () => {
@@ -254,8 +265,8 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
       expect(results[0].id).toBe('mem-1');
       expect(mockGenerateEmbedding).toHaveBeenCalledWith('existential philosophy');
 
-      // Should use RRF CTEs (index 2 = actual search query)
-      const sql = mockQuery.mock.calls[2][0];
+      // Should use RRF CTEs (client index 2 = actual search query)
+      const sql = mockClientQuery.mock.calls[2][0];
       expect(sql).toContain('vector_search');
       expect(sql).toContain('importance_search');
     });
@@ -329,7 +340,7 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
         limit: 1
       });
 
-      const sql = mockQuery.mock.calls[2][0];
+      const sql = mockClientQuery.mock.calls[2][0];
       expect(sql).toMatch(/ORDER BY rrf_score DESC\s+LIMIT 1/);
     });
 
@@ -351,8 +362,8 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
 
     it('should return empty array on database error', async () => {
       mockGenerateEmbedding.mockResolvedValueOnce(FAKE_EMBEDDING);
-      // BEGIN succeeds but SET LOCAL fails
-      mockQuery
+      // BEGIN succeeds but SET LOCAL fails (on client)
+      mockClientQuery
         .mockResolvedValueOnce(undefined)  // BEGIN
         .mockRejectedValueOnce(new Error('connection refused'))  // SET LOCAL fails
         .mockResolvedValueOnce(undefined); // ROLLBACK
@@ -411,8 +422,8 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
         userId: 'user-1'
       });
 
-      // Default limit = 10, so over-fetch = 20 (index 2 = RRF query)
-      const sql = mockQuery.mock.calls[2][0];
+      // Default limit = 10, so over-fetch = 20 (client index 2 = RRF query)
+      const sql = mockClientQuery.mock.calls[2][0];
       expect(sql).toMatch(/LIMIT 20\s/); // overFetchLimit
       expect(sql).toMatch(/ORDER BY rrf_score DESC\s+LIMIT 10/); // final limit
     });

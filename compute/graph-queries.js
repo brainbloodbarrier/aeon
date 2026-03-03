@@ -41,11 +41,11 @@ async function _safeGraphQuery(queryName, queryFn) {
 /**
  * Find a persona's immediate neighborhood (direct connections).
  * @param {string} personaName
- * @returns {Promise<Object|null>}
+ * @returns {Promise<Array<Object>|null>}
  */
 export async function findPersonaNeighborhood(personaName) {
-  validatePersonaName(personaName);
   return _safeGraphQuery('findPersonaNeighborhood', async () => {
+    validatePersonaName(personaName);
     const result = await runCypher(
       `MATCH (p:Persona {name: $name})-[r]-(connected)
        RETURN connected.name AS name, type(r) AS relationship,
@@ -71,9 +71,9 @@ export async function findPersonaNeighborhood(personaName) {
  * @returns {Promise<Object|null>}
  */
 export async function findRelationshipPath(personaA, personaB) {
-  validatePersonaName(personaA);
-  validatePersonaName(personaB);
   return _safeGraphQuery('findRelationshipPath', async () => {
+    validatePersonaName(personaA);
+    validatePersonaName(personaB);
     const result = await runCypher(
       `MATCH path = shortestPath(
          (a:Persona {name: $nameA})-[*..6]-(b:Persona {name: $nameB})
@@ -95,8 +95,8 @@ export async function findRelationshipPath(personaA, personaB) {
 }
 
 /**
- * Detect persona communities using label propagation.
- * @returns {Promise<Array|null>}
+ * Detect persona communities by grouping on category.
+ * @returns {Promise<Array<Object>|null>}
  */
 export async function detectPersonaCommunities() {
   return _safeGraphQuery('detectPersonaCommunities', async () => {
@@ -122,8 +122,8 @@ export async function detectPersonaCommunities() {
  * @returns {Promise<Array|null>}
  */
 export async function findInfluenceChain(personaName, depth = 3) {
-  validatePersonaName(personaName);
   return _safeGraphQuery('findInfluenceChain', async () => {
+    validatePersonaName(personaName);
     // Cap depth at 6 to prevent expensive traversals.
     // Interpolation is required: Neo4j Cypher does not support parameterized
     // variable-length path bounds (*1..$depth is invalid syntax).

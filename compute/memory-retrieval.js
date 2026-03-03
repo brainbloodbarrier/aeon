@@ -15,10 +15,13 @@
  * @module compute/memory-retrieval
  */
 
-import { getSharedPool } from './db-pool.js';
+import { getSharedPool, getClient } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
 import { generateEmbedding } from './embedding-provider.js';
 import { SEMANTIC_SEARCH, RRF_CONFIG, HNSW_CONFIG } from './constants.js';
+
+/** Valid pgvector iterative_scan modes for allowlist validation. @private */
+const VALID_ITERATIVE_SCAN = new Set(['off', 'strict_order', 'relaxed_order']);
 
 /**
  * Get database connection pool.
@@ -30,30 +33,41 @@ function getPool() {
 }
 
 /**
- * Execute a query function within a transaction that sets optimal HNSW index
- * parameters via SET LOCAL (scoped to the current transaction only).
+ * Execute a query function on a dedicated client within a transaction that
+ * sets optimal HNSW index parameters via SET LOCAL.
+ *
+ * Uses getClient() so all statements (BEGIN, SET LOCAL, query, COMMIT) run
+ * on the same connection — Pool.query() dispatches each call to a different
+ * client, making SET LOCAL ineffective.
  *
  * pgvector 0.8.0+ iterative_scan prevents under-fetching when post-filter
  * selectivity (e.g. persona_id + user_id) reduces candidates below LIMIT.
  *
- * @param {Object} db - PostgreSQL pool/client with query() method
- * @param {Function} queryFn - Async function that performs the actual search query
+ * @param {Function} queryFn - Async function receiving the client
  * @returns {Promise<*>} Result of queryFn
  * @private
  */
-async function withHnswConfig(db, queryFn) {
-  await db.query('BEGIN');
+async function withHnswConfig(queryFn) {
+  if (!VALID_ITERATIVE_SCAN.has(HNSW_CONFIG.ITERATIVE_SCAN)) {
+    throw new Error(`Invalid hnsw.iterative_scan value: ${HNSW_CONFIG.ITERATIVE_SCAN}`);
+  }
+  const client = await getClient();
   try {
-    await db.query(`SET LOCAL hnsw.iterative_scan = '${HNSW_CONFIG.ITERATIVE_SCAN}'`);
+    await client.query('BEGIN');
+    await client.query(`SET LOCAL hnsw.iterative_scan = '${HNSW_CONFIG.ITERATIVE_SCAN}'`);
     if (HNSW_CONFIG.EF_SEARCH !== 40) {
-      await db.query(`SET LOCAL hnsw.ef_search = ${HNSW_CONFIG.EF_SEARCH}`);
+      await client.query(`SET LOCAL hnsw.ef_search = ${HNSW_CONFIG.EF_SEARCH}`);
     }
-    const result = await queryFn();
-    await db.query('COMMIT');
+    const result = await queryFn(client);
+    await client.query('COMMIT');
     return result;
   } catch (error) {
-    await db.query('ROLLBACK');
+    try { await client.query('ROLLBACK'); } catch (rbErr) {
+      console.error('[MemoryRetrieval] ROLLBACK failed:', rbErr.message);
+    }
     throw error;
+  } finally {
+    client.release();
   }
 }
 
@@ -79,17 +93,21 @@ async function withHnswConfig(db, queryFn) {
  */
 export async function hybridMemorySearch(personaId, userId, queryEmbedding, options = {}) {
   const {
-    limit = SEMANTIC_SEARCH.DEFAULT_LIMIT,
-    overFetchMultiplier = RRF_CONFIG.OVER_FETCH_MULTIPLIER,
-    rrf_k = RRF_CONFIG.K
+    limit: rawLimit = SEMANTIC_SEARCH.DEFAULT_LIMIT,
+    overFetchMultiplier: rawMultiplier = RRF_CONFIG.OVER_FETCH_MULTIPLIER,
+    rrf_k: rawK = RRF_CONFIG.K
   } = options;
+
+  // Sanitize interpolated values to guaranteed integers (defense-in-depth
+  // even though current callers only pass constants from RRF_CONFIG).
+  const limit = Number.isFinite(rawLimit) ? Math.floor(rawLimit) : SEMANTIC_SEARCH.DEFAULT_LIMIT;
+  const rrf_k = Number.isFinite(rawK) ? Math.floor(rawK) : RRF_CONFIG.K;
+  const overFetchMultiplier = Number.isFinite(rawMultiplier) ? Math.floor(rawMultiplier) : RRF_CONFIG.OVER_FETCH_MULTIPLIER;
 
   const db = getPool();
   const overFetchLimit = limit * overFetchMultiplier;
 
   if (!queryEmbedding) {
-    // Fallback: importance + recency when no embedding available.
-    // `limit` is a numeric constant from SEMANTIC_SEARCH — safe to interpolate.
     const result = await db.query(
       `SELECT id, memory_type, content, importance_score, created_at
        FROM memories
@@ -103,13 +121,12 @@ export async function hybridMemorySearch(personaId, userId, queryEmbedding, opti
 
   // RRF: Two separate ranked lists fused by reciprocal rank.
   // Each CTE uses a bare ORDER BY that enables HNSW index usage.
-  // Wrapped in withHnswConfig to set iterative_scan for filtered queries.
+  // Wrapped in withHnswConfig for iterative_scan on a dedicated client.
   //
-  // overFetchLimit, rrf_k, and limit are all numeric constants derived from
-  // RRF_CONFIG / SEMANTIC_SEARCH (not user input) — template literal
-  // interpolation is correct and intentional; parameterizing them would
-  // degrade PG query planning with no security benefit.
-  const result = await withHnswConfig(db, () => db.query(
+  // overFetchLimit, rrf_k, and limit are sanitized integers (see above) —
+  // template literal interpolation is intentional; parameterizing LIMIT
+  // degrades PG query planning with no security benefit.
+  const result = await withHnswConfig((client) => client.query(
     `WITH vector_search AS (
         SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $3::vector) AS rank
         FROM memories
@@ -162,7 +179,6 @@ export async function hybridMemorySearch(personaId, userId, queryEmbedding, opti
  * @param {string} options.personaId - Persona UUID to scope results
  * @param {string} options.userId - User UUID to scope results
  * @param {number} [options.limit] - Max results (default: SEMANTIC_SEARCH.DEFAULT_LIMIT)
- * @param {number} [options.minSimilarity] - Unused (kept for API compat), filtering now implicit via RRF ranking
  * @param {string} [options.sessionId] - Session UUID for logging
  * @returns {Promise<Array<Object>>} Matching memories sorted by relevance, or empty array on error
  */
@@ -200,7 +216,7 @@ export async function searchByEmbedding(query, options = {}) {
       return rows;
     }
 
-    // Fallback: embedding generation failed (no API key, error, etc.)
+    // Fallback: embedding generation failed (service unavailable, timeout, etc.)
     await logOperation('semantic_search_fallback', {
       sessionId,
       personaId,

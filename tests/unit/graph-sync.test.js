@@ -16,7 +16,8 @@ const mockPool = {
 };
 
 jest.unstable_mockModule('../../compute/db-pool.js', () => ({
-  getSharedPool: jest.fn(() => mockPool)
+  getSharedPool: jest.fn(() => mockPool),
+  getClient: jest.fn().mockResolvedValue({ query: jest.fn().mockResolvedValue({ rows: [] }), release: jest.fn() })
 }));
 
 const mockRunCypher = jest.fn();
@@ -224,11 +225,20 @@ describe('Graph Sync Module', () => {
       );
     });
 
-    test('handles missing persona_bonds table gracefully', async () => {
-      mockQuery.mockRejectedValue(new Error('relation "persona_bonds" does not exist'));
+    test('handles missing persona_bonds table gracefully (42P01)', async () => {
+      const err = new Error('relation "persona_bonds" does not exist');
+      err.code = '42P01';
+      mockQuery.mockRejectedValue(err);
 
       const result = await syncPersonaRelationshipsToGraph();
       expect(result).toEqual({ synced: 0 });
+    });
+
+    test('returns null and logs on non-table errors', async () => {
+      mockQuery.mockRejectedValue(new Error('Neo4j connection refused'));
+
+      const result = await syncPersonaRelationshipsToGraph();
+      expect(result).toBeNull();
     });
 
     test('uses neutral as default bond type', async () => {

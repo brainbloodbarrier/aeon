@@ -1,8 +1,8 @@
 /**
  * AEON Matrix - Embedding Provider
  *
- * Generates text embeddings via Docker Model Runner (OpenAI-compatible API).
- * Replaces the previous OpenAI-based embedding generation.
+ * Centralizes all embedding generation for the system via Docker Model Runner
+ * (OpenAI-compatible API).
  *
  * Circuit breaker pattern: after consecutive failures, stops calling the API
  * for a cooldown period before retrying.

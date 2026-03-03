@@ -23,15 +23,20 @@ export function getNeo4jDriver() {
   }
 
   if (!driver) {
-    const uri = process.env.NEO4J_URI || NEO4J_CONFIG.DEFAULT_URI;
-    const user = process.env.NEO4J_USER || NEO4J_CONFIG.DEFAULT_USER;
+    try {
+      const uri = process.env.NEO4J_URI || NEO4J_CONFIG.DEFAULT_URI;
+      const user = process.env.NEO4J_USER || NEO4J_CONFIG.DEFAULT_USER;
 
-    driver = neo4j.driver(
-      uri,
-      neo4j.auth.basic(user, process.env.NEO4J_PASSWORD)
-    );
+      driver = neo4j.driver(
+        uri,
+        neo4j.auth.basic(user, process.env.NEO4J_PASSWORD)
+      );
 
-    console.log('[Neo4jPool] Driver created', { uri, user });
+      console.log('[Neo4jPool] Driver created', { uri, user });
+    } catch (error) {
+      console.error('[Neo4jPool] Failed to create driver:', error.message);
+      return null;
+    }
   }
 
   return driver;
@@ -44,7 +49,11 @@ export function getNeo4jDriver() {
 export async function closeNeo4jDriver() {
   if (driver) {
     console.log('[Neo4jPool] Closing driver');
-    await driver.close();
+    try {
+      await driver.close();
+    } catch (error) {
+      console.error('[Neo4jPool] Error closing driver:', error.message);
+    }
     driver = null;
   }
 }
@@ -66,7 +75,14 @@ export async function runCypher(query, params = {}) {
       timeout: NEO4J_CONFIG.QUERY_TIMEOUT_MS
     });
     return result;
+  } catch (error) {
+    console.error('[Neo4jPool] Cypher query failed:', error.message);
+    throw error;
   } finally {
-    await session.close();
+    try {
+      await session.close();
+    } catch (closeError) {
+      console.error('[Neo4jPool] Session close failed:', closeError.message);
+    }
   }
 }

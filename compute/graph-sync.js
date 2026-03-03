@@ -120,14 +120,22 @@ export async function syncPersonaRelationshipsToGraph() {
 
     return { synced: cyResult ? result.rows.length : 0 };
   } catch (error) {
-    // Table might not exist — that's OK
-    return { synced: 0 };
+    // persona_bonds table may not exist if migration 014 hasn't run (42P01 = undefined_table)
+    if (error.code === '42P01') {
+      return { synced: 0 };
+    }
+    console.error('[GraphSync] syncPersonaRelationshipsToGraph failed:', error.message);
+    logOperation('error_graceful', {
+      details: { error_type: 'graph_sync_persona_rels', error_message: error.message },
+      success: false
+    }).catch(() => {});
+    return null;
   }
 }
 
 /**
  * Full graph sync: personas + user relationships + persona bonds.
- * @returns {Promise<Object>}
+ * @returns {Promise<Object|null>} Sync summary or null on failure
  */
 export async function fullGraphSync() {
   const startTime = Date.now();
@@ -156,8 +164,8 @@ export async function fullGraphSync() {
     }
 
     const summary = {
-      personas_synced: personas?.synced || 0,
-      persona_relationships_synced: personaRels?.synced || 0,
+      personas_synced: personas?.synced ?? null,
+      persona_relationships_synced: personaRels?.synced ?? null,
       user_relationships_synced: userRelsSynced,
       duration_ms: Date.now() - startTime
     };
@@ -198,6 +206,7 @@ export async function safeGraphSync(userId) {
 
     return result;
   } catch (error) {
+    console.error('[GraphSync] safeGraphSync failed:', error.message);
     logOperation('error_graceful', {
       details: {
         error_type: 'graph_sync_failure',

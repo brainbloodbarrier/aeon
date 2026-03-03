@@ -37,6 +37,7 @@ const mockPool = {
 
 jest.unstable_mockModule('../../compute/db-pool.js', () => ({
   getSharedPool: jest.fn(() => mockPool),
+  getClient: jest.fn().mockResolvedValue({ query: jest.fn().mockResolvedValue({ rows: [] }), release: jest.fn() }),
   withTransaction: jest.fn(async (callback) => callback(mockPool))
 }));
 

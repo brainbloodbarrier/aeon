@@ -687,6 +687,7 @@ export async function assembleContext(params) {
  * - Updates persona temporal state (last active)
  * - Increments global entropy
  * - Classifies new memories for preterite/elect status
+ * - Triggers graph sync (fire-and-forget, only if state changed)
  *
  * @param {Object} sessionData - Session completion data
  * @param {string} sessionData.sessionId - Session UUID
@@ -859,7 +860,9 @@ export async function completeSession(sessionData) {
 
     // Graph sync: fire-and-forget outside transaction (only when state changed)
     if (txResult.relationship?.trustLevelChanged || txResult.memoriesStored > 0) {
-      safeGraphSync(userId).catch(() => {});
+      safeGraphSync(userId).catch(err =>
+        console.error('[ContextAssembler] Graph sync fire-and-forget failed:', err.message)
+      );
     }
 
     return txResult;
