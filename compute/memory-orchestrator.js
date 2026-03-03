@@ -91,7 +91,9 @@ export async function safeMemoryRetrieval(personaId, userId, query, sessionId) {
     const queryEmbedding = await generateEmbedding(query);
 
     if (queryEmbedding) {
-      // Hybrid: semantic similarity (60%) + importance (40%)
+      // Hybrid: semantic similarity + importance weighting.
+      // Constants interpolated directly (not user input); parameterizing
+      // LIMIT and numeric weights degrades PG query planning.
       result = await db.query(
         `SELECT id, memory_type, content, importance_score, created_at,
            (${SEMANTIC_SEARCH.SEMANTIC_WEIGHT} * (1.0 - (embedding <=> $3::vector)) + ${SEMANTIC_SEARCH.IMPORTANCE_WEIGHT} * importance_score) AS hybrid_score

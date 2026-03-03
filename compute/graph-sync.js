@@ -132,41 +132,50 @@ export async function syncPersonaRelationshipsToGraph() {
 export async function fullGraphSync() {
   const startTime = Date.now();
 
-  // Sync personas and inter-persona relationships in parallel
-  const [personas, personaRels] = await Promise.all([
-    syncPersonasToGraph(),
-    syncPersonaRelationshipsToGraph()
-  ]);
+  try {
+    // Sync personas and inter-persona relationships in parallel
+    const [personas, personaRels] = await Promise.all([
+      syncPersonasToGraph(),
+      syncPersonaRelationshipsToGraph()
+    ]);
 
-  // Sync user relationships in batched parallel chunks
-  const pool = getSharedPool();
-  const users = await pool.query('SELECT DISTINCT user_id FROM relationships ORDER BY user_id');
-  let userRelsSynced = 0;
+    // Sync user relationships in batched parallel chunks
+    const pool = getSharedPool();
+    const users = await pool.query('SELECT DISTINCT user_id FROM relationships ORDER BY user_id');
+    let userRelsSynced = 0;
 
-  const batchSize = NEO4J_CONFIG.SYNC_BATCH_SIZE;
-  for (let i = 0; i < users.rows.length; i += batchSize) {
-    const batch = users.rows.slice(i, i + batchSize);
-    const results = await Promise.all(
-      batch.map(row => syncUserRelationshipsToGraph(row.user_id))
-    );
-    for (const result of results) {
-      if (result) userRelsSynced += result.synced;
+    const batchSize = NEO4J_CONFIG.SYNC_BATCH_SIZE;
+    for (let i = 0; i < users.rows.length; i += batchSize) {
+      const batch = users.rows.slice(i, i + batchSize);
+      const results = await Promise.all(
+        batch.map(row => syncUserRelationshipsToGraph(row.user_id))
+      );
+      for (const result of results) {
+        if (result) userRelsSynced += result.synced;
+      }
     }
+
+    const summary = {
+      personas_synced: personas?.synced || 0,
+      persona_relationships_synced: personaRels?.synced || 0,
+      user_relationships_synced: userRelsSynced,
+      duration_ms: Date.now() - startTime
+    };
+
+    logOperation('full_graph_sync', {
+      details: summary,
+      success: true
+    }).catch(() => {});
+
+    return summary;
+  } catch (error) {
+    console.error('[GraphSync] fullGraphSync failed:', error.message);
+    logOperation('error_graceful', {
+      details: { error_type: 'full_graph_sync_failure', error_message: error.message },
+      success: false
+    }).catch(() => {});
+    return null;
   }
-
-  const summary = {
-    personas_synced: personas?.synced || 0,
-    persona_relationships_synced: personaRels?.synced || 0,
-    user_relationships_synced: userRelsSynced,
-    duration_ms: Date.now() - startTime
-  };
-
-  await logOperation('full_graph_sync', {
-    details: summary,
-    success: true
-  }).catch(() => {});
-
-  return summary;
 }
 
 /**

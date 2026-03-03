@@ -310,6 +310,17 @@ describe('Graph Sync Module', () => {
       const result = await fullGraphSync();
       expect(result).toHaveProperty('personas_synced', 0);
     });
+
+    test('returns null when PG query fails mid-sync', async () => {
+      // Personas and bonds queries succeed (consumed by syncPersonasToGraph / syncPersonaRelationshipsToGraph)
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // personas
+      mockQuery.mockResolvedValueOnce({ rows: [] }); // bonds
+      // Users query (direct pool.query in fullGraphSync) fails
+      mockQuery.mockRejectedValueOnce(new Error('connection refused'));
+
+      const result = await fullGraphSync();
+      expect(result).toBeNull();
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────
