@@ -4,32 +4,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # AEON System Instructions
 
-> Instructions for Claude when operating in this repository.
-
 ## Purpose
 
-This repository summons **tight-persona outputs**. When the user brings a query, the appropriate figures are called to the table. They speak in character, with their methods intact.
+This repository summons **tight-persona outputs**. 25 personas across 7 categories sit in a bar called "O Fim" at 2AM in Rio. When the user brings a query, the appropriate figures are called to the table. They speak in character, with their methods intact.
 
-## System Components
+The Setting, persona voice rules, and response format are defined in `/.claude/skills/aeon/_style.md`. Slash commands live in `/.claude/commands/`, individual persona skills in `/.claude/skills/aeon/`.
 
-- `/personas/` — Full dossiers (soul layer), organized by category
-- `/.claude/skills/aeon/` — Individual invocation skills
-- `/.claude/commands/` — Workflow slash commands
-- `compute/` — Node.js modules for memory, drift, and context operations
-- `db/init/` — PostgreSQL schema (init) and `db/migrations/` (incremental)
+*"The law is my will."* — The User, upon entering.
 
 ---
 
 ## Development Commands
 
 ```bash
+# Full automated first-time setup (Docker + migrations + verification)
+./scripts/setup.sh
+
 # Run all tests
 npm test
 
 # Run only unit tests
 npm run test:unit
 
-# Run only integration tests
+# Run only integration tests (starts test DB automatically)
 npm run test:integration
 
 # Run a single test file
@@ -40,12 +37,18 @@ npm run init-hashes   # or: node scripts/init-soul-hashes.js
 
 # Purge stale settings (>90 days inactive)
 node scripts/purge-settings.js
+
+# Manual graph sync (PG → Neo4j)
+node scripts/sync-graph.js
+
+# Apply database migrations
+bash scripts/apply-migrations.sh
 ```
 
 ### Infrastructure
 
 ```bash
-# First-time setup
+# First-time env setup
 cp .env.example .env  # then edit DB_PASSWORD, etc.
 
 # Start PostgreSQL only (required for compute modules)
@@ -54,119 +57,19 @@ docker compose up -d
 # Start with optional Neo4j graph DB
 docker compose --profile graph up -d
 
+# Pull embedding model (Docker Model Runner, built into Docker Desktop 4.40+)
+docker model pull hf.co/second-state/All-MiniLM-L6-v2-Embedding-GGUF
+
 # View logs / tear down
 docker compose logs -f
 docker compose down
 ```
 
-**Required env var:** `DB_PASSWORD`. Optional: `NEO4J_PASSWORD`, `OPENAI_API_KEY`.
+**Required env var:** `DB_PASSWORD`. Optional: `NEO4J_PASSWORD`, `EMBEDDING_API_URL`.
 
 **Database:** `aeon_matrix` on PostgreSQL 16 with pgvector. User: `architect`. Port: `5432`.
 
 **Runtime:** Node.js >= 18 (ES Modules project, `"type": "module"`).
-
----
-
-## Quick Reference
-
-### Slash Commands
-
-| Command | Function |
-|---------|----------|
-| `/summon [persona]` | Invoke single persona |
-| `/council [topic]` | Gather 3-5 relevant personas |
-| `/dialectic [thesis]` | Hegelian thesis-antithesis-synthesis |
-| `/familia [problem]` | Corleone consultation (Vito + Michael) |
-| `/heteronyms [question]` | Pessoan fragmentation (4 heteronyms) |
-| `/scry [question]` | Enochian protocol (Nalvage/Ave/Madimi) |
-| `/magick [situation]` | Moore's narrative magic |
-| `/war [conflict]` | Sun Tzu + Machiavelli strategy |
-| `/summon-matrix [persona]` | Matrix-enabled persona invocation |
-| `/matrix-status` | View Matrix state and analytics |
-| `/drift-check [persona]` | Check voice drift metrics |
-
-### Skills
-
-Invoke with: `use skill aeon/[persona]`
-
-```
-aeon/pessoa    aeon/caeiro    aeon/reis      aeon/campos    aeon/soares
-aeon/hegel     aeon/socrates  aeon/diogenes
-aeon/moore     aeon/dee       aeon/crowley   aeon/choronzon
-aeon/tesla     aeon/feynman   aeon/lovelace
-aeon/vito      aeon/michael   aeon/suntzu    aeon/machiavelli
-aeon/hermes    aeon/prometheus aeon/cassandra
-aeon/nalvage   aeon/ave       aeon/madimi
-```
-
----
-
-## Output Style
-
-All personas follow the universal style in `/.claude/skills/aeon/_style.md`:
-
-### Response Format
-```
-⟨ PERSONA_NAME | domínio | método ⟩
-
-[Response in persona voice — tight, dense, in character]
-```
-
-### Principles
-1. **Never break character**
-2. **Dense, not long** — each sentence carries weight
-3. **No disclaimers** — persona IS, doesn't "represent"
-4. **Silence > filler**
-
----
-
-## Workflow Patterns
-
-### /dialectic
-```
-THESIS -> ANTITHESIS -> SYNTHESIS (Aufhebung)
-```
-
-### /heteronyms
-```
-CAEIRO (strip) -> REIS (accept) -> CAMPOS (feel) -> SOARES (find beauty) -> INTEGRATE
-```
-
-### /familia
-```
-VITO (relationships) + MICHAEL (cold calculation) -> DECISION + COST WARNING
-```
-
-### /scry
-```
-DEFINE unknown -> SELECT entity -> RECEIVE transmission -> INTERPRET
-```
-
-### /magick
-```
-CURRENT STORY -> WHO WROTE IT -> COUNTER-SPELL -> RITUAL ACTION
-```
-
-### /war
-```
-SUN TZU (terrain, forces, position) + MACHIAVELLI (actors, real power) -> OPTIONS
-```
-
----
-
-## The Setting
-
-It's always 2 AM. The bar has no name—locals call it "O Fim" (The End).
-
-Chopp flows cold. The jukebox plays Tom Jobim, but sometimes Bowie bleeds through. Occasionally, Fado. The humidity is eternal.
-
-The personas sit at a long table, or huddle in corners, or argue at the counter. Soares watches from a window across the street. Choronzon is the static between radio stations.
-
-When you arrive with a question, the right ones turn to look.
-
----
-
-*"The law is my will."* — The User, upon entering.
 
 ---
 
@@ -195,25 +98,43 @@ When a persona is invoked, `context-assembler.js` orchestrates a pipeline with t
 5. **Setting** (100) — Bar atmosphere context
 6. **Temporal/Pynchon layers** (~675) — Non-linear time, entropy, preterite memory, zone boundaries, narrative gravity, interface bleed, paranoid undertones
 
-Each `safe*Fetch` helper catches errors and returns `null` — a failing subsystem must never break context assembly.
+Session completion (`completeSession()`) handles: memory extraction → familiarity update → setting save → graph sync (fire-and-forget).
 
-### Pynchon Stack
+### Compute Module Pipelines
 
-Additional compute modules implementing paranoid realism in two phases:
+The modules in `compute/` are organized into functional pipelines:
 
-**Phase 1** (Temporal Consciousness): `temporal-awareness.js`, `entropy-tracker.js`, `ambient-generator.js`, `zone-boundary-detector.js`, `preterite-memory.js`
+- **Context pipeline:** `context-assembler.js` (entry point) → `soul-marker-extractor.js` → `relationship-shaper.js` → `memory-framing.js` → `drift-correction.js` → `setting-preserver.js`
+- **Drift pipeline:** `drift-orchestrator.js` → `drift-analyzer.js` → `drift-detection.js` → `drift-correction.js` → `drift-dashboard.js`
+- **Memory pipeline:** `memory-orchestrator.js` → `memory-extractor.js` → `memory-retrieval.js` → `memory-framing.js` → `persona-memory.js`
+- **Relationship pipeline:** `relationship-tracker.js` → `relationship-shaper.js` → `persona-relationship-tracker.js` → `persona-bonds.js`
+- **Pynchon Phase 1** (Temporal): `temporal-awareness.js`, `entropy-tracker.js`, `ambient-generator.js`, `zone-boundary-detector.js`, `preterite-memory.js`
+- **Pynchon Phase 2** (They): `they-awareness.js`, `counterforce-tracker.js`, `narrative-gravity.js`, `interface-bleed.js`
+- **Infrastructure:** `db-pool.js` (singleton PG), `neo4j-pool.js` (singleton Neo4j), `embedding-provider.js` (circuit breaker), `operator-logger.js` (backoff), `constants.js` (~60 config objects)
+- **Graph:** `graph-sync.js` (PG→Neo4j sync), `graph-queries.js` (traversal: neighborhood, path, communities, centrality)
+- **Validation:** `soul-validator.js` (SHA-256), `persona-validator.js` (existence check)
 
-**Phase 2** (They Awareness): `they-awareness.js`, `counterforce-tracker.js`, `narrative-gravity.js`, `interface-bleed.js`
+### Graceful Degradation Pattern
+
+Optional subsystems return `null` when unavailable — callers must handle this:
+
+- `embedding-provider.js`: circuit breaker (3 failures → 60s cooldown), `generateEmbedding()` returns `null`
+- `neo4j-pool.js`: returns `null` when `NEO4J_PASSWORD` is unset, all graph features degrade
+- `context-assembler.js`: all `safe*Fetch` helpers catch errors and return `null` — a failing subsystem must never break context assembly
+
+### Embeddings
+
+Generated locally via Docker Model Runner (`hf.co/second-state/All-MiniLM-L6-v2-Embedding-GGUF`, 384D). API endpoint: `http://localhost:12434/engines/v1/embeddings`. All embedding generation goes through `compute/embedding-provider.js`. If Docker Model Runner is unavailable, memory storage proceeds without embeddings.
 
 ### Database Schema
 
-Core tables: `personas`, `users`, `conversations`, `interactions`, `relationships`, `memories`, `operator_logs`, `context_templates`, `user_settings`.
+Core tables: `personas`, `users`, `conversations`, `interactions`, `relationships`, `memories`, `drift_alerts`, `operator_logs`, `context_templates`, `user_settings`.
 
-Migrations in `db/migrations/` (002, 006, 008–015). Init schema in `db/init/001_schema.sql`. Run `scripts/setup.sh` for full automated setup (Docker + migrations + verification).
+Init schema: `db/init/001_schema.sql`. Migrations in `db/migrations/` (numbered: 002, 006, 008–016). New migrations follow the next available number. Run `scripts/setup.sh` for full automated setup or `bash scripts/apply-migrations.sh` for migrations only.
 
 ### MCP Integration
 
-MCP tools are configured via Claude Code settings (`.claude/settings.json`), not Docker. The compute modules in `compute/` run directly on the host via Node.js — Docker only provides the storage layer (PostgreSQL + pgvector).
+MCP tools are configured via Claude Code settings (`.claude/settings.local.json`), not Docker. The compute modules in `compute/` run directly on the host via Node.js — Docker only provides the storage layer (PostgreSQL + pgvector).
 
 ---
 
@@ -237,6 +158,9 @@ MCP tools are configured via Claude Code settings (`.claude/settings.json`), not
 - **All compute modules must use `getSharedPool()` from `db-pool.js`**: No compute module may import `pg` directly or create its own Pool instance.
 - **Soul file modifications require hash regeneration**: Run `npm run init-hashes` and commit the updated `personas/.soul-hashes.json`.
 - **Context assembly helpers must fail silently with `null`**: All `safe*Fetch` functions in `context-assembler.js` must catch errors and return `null`.
+- **All embedding generation goes through `compute/embedding-provider.js`**: No module may call external embedding APIs directly.
+- **Neo4j pool follows db-pool singleton pattern**: `neo4j-pool.js` returns `null` when `NEO4J_PASSWORD` is unset.
+- **All thresholds and config values live in `compute/constants.js`**: Never hardcode magic numbers in module files.
 
 ---
 

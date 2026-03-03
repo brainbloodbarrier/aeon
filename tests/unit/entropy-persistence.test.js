@@ -16,7 +16,8 @@ const mockPool = {
 };
 
 jest.unstable_mockModule('../../compute/db-pool.js', () => ({
-  getSharedPool: jest.fn(() => mockPool)
+  getSharedPool: jest.fn(() => mockPool),
+  getClient: jest.fn().mockResolvedValue({ query: jest.fn().mockResolvedValue({ rows: [] }), release: jest.fn() })
 }));
 
 jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
@@ -147,7 +148,8 @@ describe('Cross-Session Entropy Persistence', () => {
 
       const result = await loadEntropyState('socrates', 'user-123');
 
-      expect(result.entropyValue).toBe(ENTROPY_PERSISTENCE.DEFAULT_VALUE);
+      // Use toBeCloseTo due to temporal decay applied over milliseconds elapsed
+      expect(result.entropyValue).toBeCloseTo(ENTROPY_PERSISTENCE.DEFAULT_VALUE, 5);
       expect(result.sessionCount).toBe(2);
       expect(result.isNew).toBe(false);
     });

@@ -1,9 +1,13 @@
 /**
  * AEON Matrix - Memory Retrieval
  *
- * Provides semantic search over persona memories using pgvector embeddings,
- * with automatic fallback to keyword-based text search when embedding
- * generation fails (missing API key, network error, etc.).
+ * Canonical owner of hybrid memory search. Uses Reciprocal Rank Fusion (RRF)
+ * to merge two independently ranked lists — vector similarity (HNSW-indexed)
+ * and importance+recency — instead of a weighted linear combination that
+ * prevents index usage.
+ *
+ * Each CTE uses a bare ORDER BY operator (embedding <=> $3::vector or
+ * importance_score DESC) so pgvector's HNSW index is actually leveraged.
  *
  * Constitution Principle II: All infrastructure operations are invisible.
  * Constitution Principle IV: Relationship continuity through memory.
@@ -11,10 +15,13 @@
  * @module compute/memory-retrieval
  */
 
-import { getSharedPool } from './db-pool.js';
+import { getSharedPool, getClient } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
-import { generateEmbedding } from './memory-extractor.js';
-import { SEMANTIC_SEARCH } from './constants.js';
+import { generateEmbedding } from './embedding-provider.js';
+import { SEMANTIC_SEARCH, RRF_CONFIG, HNSW_CONFIG } from './constants.js';
+
+/** Valid pgvector iterative_scan modes for allowlist validation. @private */
+const VALID_ITERATIVE_SCAN = new Set(['off', 'strict_order', 'relaxed_order']);
 
 /**
  * Get database connection pool.
@@ -26,18 +33,152 @@ function getPool() {
 }
 
 /**
+ * Execute a query function on a dedicated client within a transaction that
+ * sets optimal HNSW index parameters via SET LOCAL.
+ *
+ * Uses getClient() so all statements (BEGIN, SET LOCAL, query, COMMIT) run
+ * on the same connection — Pool.query() dispatches each call to a different
+ * client, making SET LOCAL ineffective.
+ *
+ * pgvector 0.8.0+ iterative_scan prevents under-fetching when post-filter
+ * selectivity (e.g. persona_id + user_id) reduces candidates below LIMIT.
+ *
+ * @param {Function} queryFn - Async function receiving the client
+ * @returns {Promise<*>} Result of queryFn
+ * @private
+ */
+async function withHnswConfig(queryFn) {
+  if (!VALID_ITERATIVE_SCAN.has(HNSW_CONFIG.ITERATIVE_SCAN)) {
+    throw new Error(`Invalid hnsw.iterative_scan value: ${HNSW_CONFIG.ITERATIVE_SCAN}`);
+  }
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SET LOCAL hnsw.iterative_scan = '${HNSW_CONFIG.ITERATIVE_SCAN}'`);
+    if (HNSW_CONFIG.EF_SEARCH !== 40) {
+      await client.query(`SET LOCAL hnsw.ef_search = ${HNSW_CONFIG.EF_SEARCH}`);
+    }
+    const result = await queryFn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (rbErr) {
+      console.error('[MemoryRetrieval] ROLLBACK failed:', rbErr.message);
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Hybrid memory search using Reciprocal Rank Fusion (RRF).
+ *
+ * Runs two separate ranked queries — one by vector cosine distance (uses HNSW
+ * index) and one by importance+recency — then fuses them with RRF scoring:
+ *   rrf_score = 1/(k + vector_rank) + 1/(k + importance_rank)
+ *
+ * Falls back to importance+recency when no embedding is available, and to
+ * importance-only when RRF returns zero rows (brand-new user with no embedded
+ * memories yet).
+ *
+ * @param {string} personaId - Persona UUID
+ * @param {string} userId - User UUID
+ * @param {number[]|null} queryEmbedding - 384-D embedding vector (or null)
+ * @param {Object} [options={}] - Search options
+ * @param {number} [options.limit] - Max results (default: SEMANTIC_SEARCH.DEFAULT_LIMIT)
+ * @param {number} [options.overFetchMultiplier] - CTE over-fetch factor (default: RRF_CONFIG.OVER_FETCH_MULTIPLIER)
+ * @param {number} [options.rrf_k] - RRF smoothing constant (default: RRF_CONFIG.K)
+ * @returns {Promise<{rows: Array<Object>, strategy: string}>} Matching memories and strategy used
+ */
+export async function hybridMemorySearch(personaId, userId, queryEmbedding, options = {}) {
+  const {
+    limit: rawLimit = SEMANTIC_SEARCH.DEFAULT_LIMIT,
+    overFetchMultiplier: rawMultiplier = RRF_CONFIG.OVER_FETCH_MULTIPLIER,
+    rrf_k: rawK = RRF_CONFIG.K
+  } = options;
+
+  // Sanitize interpolated values to guaranteed integers (defense-in-depth
+  // even though current callers only pass constants from RRF_CONFIG).
+  const limit = Number.isFinite(rawLimit) ? Math.floor(rawLimit) : SEMANTIC_SEARCH.DEFAULT_LIMIT;
+  const rrf_k = Number.isFinite(rawK) ? Math.floor(rawK) : RRF_CONFIG.K;
+  const overFetchMultiplier = Number.isFinite(rawMultiplier) ? Math.floor(rawMultiplier) : RRF_CONFIG.OVER_FETCH_MULTIPLIER;
+
+  const db = getPool();
+  const overFetchLimit = limit * overFetchMultiplier;
+
+  if (!queryEmbedding) {
+    const result = await db.query(
+      `SELECT id, memory_type, content, importance_score, created_at
+       FROM memories
+       WHERE persona_id = $1 AND user_id = $2
+       ORDER BY importance_score DESC, created_at DESC
+       LIMIT ${limit}`,
+      [personaId, userId]
+    );
+    return { rows: result.rows, strategy: 'importance_recency' };
+  }
+
+  // RRF: Two separate ranked lists fused by reciprocal rank.
+  // Each CTE uses a bare ORDER BY that enables HNSW index usage.
+  // Wrapped in withHnswConfig for iterative_scan on a dedicated client.
+  //
+  // overFetchLimit, rrf_k, and limit are sanitized integers (see above) —
+  // template literal interpolation is intentional; parameterizing LIMIT
+  // degrades PG query planning with no security benefit.
+  const result = await withHnswConfig((client) => client.query(
+    `WITH vector_search AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $3::vector) AS rank
+        FROM memories
+        WHERE persona_id = $1 AND user_id = $2 AND embedding IS NOT NULL
+        ORDER BY embedding <=> $3::vector
+        LIMIT ${overFetchLimit}
+     ),
+     importance_search AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY importance_score DESC, created_at DESC) AS rank
+        FROM memories
+        WHERE persona_id = $1 AND user_id = $2
+        ORDER BY importance_score DESC, created_at DESC
+        LIMIT ${overFetchLimit}
+     )
+     SELECT m.id, m.memory_type, m.content, m.importance_score, m.created_at,
+            COALESCE(1.0 / (${rrf_k} + v.rank), 0) + COALESCE(1.0 / (${rrf_k} + i.rank), 0) AS rrf_score
+     FROM vector_search v
+     FULL OUTER JOIN importance_search i ON v.id = i.id
+     JOIN memories m ON m.id = COALESCE(v.id, i.id)
+     ORDER BY rrf_score DESC
+     LIMIT ${limit}`,
+    [personaId, userId, JSON.stringify(queryEmbedding)]
+  ));
+
+  // If RRF returned nothing (brand new user), fallback to importance+recency
+  if (result.rows.length === 0) {
+    const fallback = await db.query(
+      `SELECT id, memory_type, content, importance_score, created_at
+       FROM memories
+       WHERE persona_id = $1 AND user_id = $2
+       ORDER BY importance_score DESC, created_at DESC
+       LIMIT ${limit}`,
+      [personaId, userId]
+    );
+    return { rows: fallback.rows, strategy: 'rrf_fallback_to_importance' };
+  }
+
+  return { rows: result.rows, strategy: 'rrf_hybrid' };
+}
+
+/**
  * Search memories by semantic similarity using pgvector embeddings.
  *
- * Generates an embedding for the query text, then uses cosine distance (<=>)
- * to find the most similar memories. Falls back to text search if embedding
- * generation fails.
+ * Generates an embedding for the query text, then delegates to
+ * hybridMemorySearch for RRF-based retrieval. Falls back to text search
+ * if embedding generation fails.
  *
  * @param {string} query - The search query text
  * @param {Object} options - Search options
  * @param {string} options.personaId - Persona UUID to scope results
  * @param {string} options.userId - User UUID to scope results
  * @param {number} [options.limit] - Max results (default: SEMANTIC_SEARCH.DEFAULT_LIMIT)
- * @param {number} [options.minSimilarity] - Min cosine similarity threshold (default: SEMANTIC_SEARCH.MIN_SIMILARITY)
  * @param {string} [options.sessionId] - Session UUID for logging
  * @returns {Promise<Array<Object>>} Matching memories sorted by relevance, or empty array on error
  */
@@ -46,7 +187,6 @@ export async function searchByEmbedding(query, options = {}) {
     personaId,
     userId,
     limit = SEMANTIC_SEARCH.DEFAULT_LIMIT,
-    minSimilarity = SEMANTIC_SEARCH.MIN_SIMILARITY,
     sessionId = null
   } = options;
 
@@ -57,17 +197,26 @@ export async function searchByEmbedding(query, options = {}) {
     const queryEmbedding = await generateEmbedding(query);
 
     if (queryEmbedding) {
-      return await _semanticSearch(queryEmbedding, {
+      const { rows, strategy } = await hybridMemorySearch(
+        personaId, userId, queryEmbedding, { limit }
+      );
+
+      await logOperation('semantic_search', {
+        sessionId,
         personaId,
         userId,
-        limit,
-        minSimilarity,
-        sessionId,
-        startTime
+        details: {
+          strategy,
+          results_count: rows.length
+        },
+        durationMs: Date.now() - startTime,
+        success: true
       });
+
+      return rows;
     }
 
-    // Fallback: embedding generation failed (no API key, error, etc.)
+    // Fallback: embedding generation failed (service unavailable, timeout, etc.)
     await logOperation('semantic_search_fallback', {
       sessionId,
       personaId,
@@ -97,52 +246,6 @@ export async function searchByEmbedding(query, options = {}) {
 
     return [];
   }
-}
-
-/**
- * Perform cosine-similarity search using pgvector.
- *
- * @param {number[]} queryEmbedding - 1536-dimension embedding vector
- * @param {Object} opts - Internal options
- * @returns {Promise<Array<Object>>} Matching memories
- * @private
- */
-async function _semanticSearch(queryEmbedding, opts) {
-  const { personaId, userId, limit, minSimilarity, sessionId, startTime } = opts;
-  const db = getPool();
-
-  // cosine distance: <=> returns 0 (identical) to 2 (opposite)
-  // similarity = 1 - distance
-  const result = await db.query(
-    `SELECT
-       id, memory_type, content, importance_score, created_at,
-       (1.0 - (embedding <=> $3::vector)) AS similarity,
-       (${SEMANTIC_SEARCH.SEMANTIC_WEIGHT} * (1.0 - (embedding <=> $3::vector))
-        + ${SEMANTIC_SEARCH.IMPORTANCE_WEIGHT} * importance_score) AS hybrid_score
-     FROM memories
-     WHERE persona_id = $1
-       AND user_id = $2
-       AND embedding IS NOT NULL
-       AND (1.0 - (embedding <=> $3::vector)) >= $4
-     ORDER BY hybrid_score DESC
-     LIMIT $5`,
-    [personaId, userId, JSON.stringify(queryEmbedding), minSimilarity, limit]
-  );
-
-  await logOperation('semantic_search', {
-    sessionId,
-    personaId,
-    userId,
-    details: {
-      strategy: 'embedding',
-      results_count: result.rows.length,
-      min_similarity_threshold: minSimilarity
-    },
-    durationMs: Date.now() - startTime,
-    success: true
-  });
-
-  return result.rows;
 }
 
 /**

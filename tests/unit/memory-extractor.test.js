@@ -16,11 +16,16 @@ const mockPool = {
 };
 
 jest.unstable_mockModule('../../compute/db-pool.js', () => ({
-  getSharedPool: jest.fn(() => mockPool)
+  getSharedPool: jest.fn(() => mockPool),
+  getClient: jest.fn().mockResolvedValue({ query: jest.fn().mockResolvedValue({ rows: [] }), release: jest.fn() })
 }));
 
 jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
   logOperation: jest.fn().mockResolvedValue(undefined)
+}));
+
+jest.unstable_mockModule('../../compute/embedding-provider.js', () => ({
+  generateEmbedding: jest.fn().mockResolvedValue(null)
 }));
 
 // Import after mocking

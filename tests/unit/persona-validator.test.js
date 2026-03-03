@@ -10,7 +10,8 @@ import { jest } from '@jest/globals';
 // ═══════════════════════════════════════════════════════════════════════════
 
 jest.unstable_mockModule('../../compute/db-pool.js', () => ({
-  getSharedPool: jest.fn(() => ({ query: jest.fn(), end: jest.fn() }))
+  getSharedPool: jest.fn(() => ({ query: jest.fn(), end: jest.fn() })),
+  getClient: jest.fn().mockResolvedValue({ query: jest.fn().mockResolvedValue({ rows: [] }), release: jest.fn() })
 }));
 
 jest.unstable_mockModule('../../compute/operator-logger.js', () => ({

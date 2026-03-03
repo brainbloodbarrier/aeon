@@ -78,8 +78,8 @@ CREATE TABLE interactions (
     topics JSONB DEFAULT '[]',
 
     -- Embeddings for semantic search
-    input_embedding VECTOR(1536),
-    response_embedding VECTOR(1536),
+    input_embedding VECTOR(384),
+    response_embedding VECTOR(384),
 
     -- Constraints
     CONSTRAINT quality_score_range CHECK (response_quality_score IS NULL OR (response_quality_score >= 0 AND response_quality_score <= 1))
@@ -135,7 +135,7 @@ CREATE TABLE memories (
     importance_score FLOAT DEFAULT 0.5,
 
     -- Embedding for semantic retrieval
-    embedding VECTOR(1536),
+    embedding VECTOR(384),
 
     -- Decay mechanics
     last_accessed TIMESTAMPTZ DEFAULT NOW(),
@@ -171,12 +171,12 @@ CREATE INDEX idx_drift_alerts_unresolved ON drift_alerts(persona_id) WHERE resol
 -- VECTOR INDEXES: For semantic search
 -----------------------------------------------------------
 CREATE INDEX idx_memories_embedding ON memories
-    USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100);
+    USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
 
 CREATE INDEX idx_interactions_input_embedding ON interactions
-    USING ivfflat (input_embedding vector_cosine_ops)
-    WITH (lists = 100);
+    USING hnsw (input_embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
 
 -----------------------------------------------------------
 -- TRIGGERS

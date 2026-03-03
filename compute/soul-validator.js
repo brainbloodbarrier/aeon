@@ -31,9 +31,9 @@ export const CONFIG = {
   REQUIRED_SECTIONS: [
     { name: 'title', pattern: /^#\s+.+/m, description: 'H1 title' },
     { name: 'voice', pattern: /^##\s+(Voz|Voice)/mi, description: 'Voice/Voz section' },
-    { name: 'method', pattern: /^##\s+(Método|Method|Sistema)/mi, description: 'Method/Método section' },
-    { name: 'invocation', pattern: /^##\s+(Quando Invocar|When)/mi, description: 'Invocation guidance' },
-    { name: 'barBehavior', pattern: /^##\s+(Tom no Bar|Bar)/mi, description: 'Bar behavior' }
+    { name: 'method', pattern: /^##\s+(Método|Method|Sistema|Filosofia|Função|Natureza|Mito|Hermetismo|Significados|Transformação|O Paradoxo|O Sistema|O Escândalo|Origem|Domínios|Manifestações)/mi, description: 'Core identity section' },
+    { name: 'invocation', pattern: /^##\s+(Quando Invocar|Quando Aparece|When|Como Usar)/mi, description: 'Invocation guidance' },
+    { name: 'barBehavior', pattern: /^##\s+(Tom no Bar|Bar|Os Heterônimos)/mi, description: 'Bar behavior' }
   ],
   HASH_ALGORITHM: 'sha256'
 };

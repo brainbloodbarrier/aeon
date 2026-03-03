@@ -340,18 +340,11 @@ WHERE persona_id = $1 AND user_id = $2;
 ### Embedding Generation
 
 ```javascript
-// Via run_js_ephemeral
-import OpenAI from 'openai';
+// Via Docker Model Runner (OpenAI-compatible endpoint)
+import { generateEmbedding } from './compute/embedding-provider.js';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-const text = process.env.INPUT_TEXT;
-const response = await openai.embeddings.create({
-  model: "text-embedding-3-small",
-  input: text,
-});
-
-console.log(JSON.stringify(response.data[0].embedding));
+const embedding = await generateEmbedding(text);
+// Returns 384-dimension vector or null if unavailable
 ```
 
 ### Drift Detection

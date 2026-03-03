@@ -109,7 +109,7 @@ export const ENGAGEMENT_MULTIPLIERS = {
 };
 
 // =============================================================================
-// Persona Relationships (Constitution Principle VI)
+// Persona Relationships (Persona Autonomy)
 // =============================================================================
 
 /**
@@ -191,9 +191,7 @@ export const MEMORY_FRAMING = {
  * Memory storage limits.
  */
 export const MEMORY_STORAGE = {
-  MAX_BATCH_SIZE: 13000,
-  EMBEDDING_TEXT_LIMIT: 8000,
-  MIN_EMBED_LENGTH: 10
+  MAX_BATCH_SIZE: 10000
 };
 
 /**
@@ -365,7 +363,7 @@ export const PHASE_EFFECTS = {
 export const IMPACT_RECOVERY_LIMIT = 0.02;
 
 // =============================================================================
-// Temporal Awareness (Constitution Principle VII)
+// Temporal Awareness (Temporal Consciousness)
 // =============================================================================
 
 /**
@@ -612,14 +610,108 @@ export const AMBIENT_CONFIG = {
 export const SEMANTIC_SEARCH = {
   /** Default maximum results returned by semantic search */
   DEFAULT_LIMIT: 10,
-  /** Minimum cosine similarity threshold (0-1, where 1 = identical) */
+  /** @deprecated Replaced by RRF ranking — kept for potential rollback */
   MIN_SIMILARITY: 0.3,
-  /** Weight for semantic similarity in hybrid scoring */
+  /** @deprecated Replaced by RRF_CONFIG — kept for potential rollback */
   SEMANTIC_WEIGHT: 0.6,
-  /** Weight for importance score in hybrid scoring */
+  /** @deprecated Replaced by RRF_CONFIG — kept for potential rollback */
   IMPORTANCE_WEIGHT: 0.4,
-  /** Embedding model identifier */
-  EMBEDDING_MODEL: 'text-embedding-3-small',
-  /** Embedding vector dimensions */
-  EMBEDDING_DIMENSIONS: 1536
+};
+
+/**
+ * Reciprocal Rank Fusion (RRF) configuration for hybrid memory search.
+ * RRF merges two ranked lists (vector similarity + importance) using
+ * 1/(k + rank) scoring, enabling each sub-query to use bare ORDER BY
+ * operators that leverage HNSW indexes.
+ */
+export const RRF_CONFIG = {
+  /** RRF smoothing constant (standard default) */
+  K: 60,
+  /** Fetch N x LIMIT per CTE for better rank overlap */
+  OVER_FETCH_MULTIPLIER: 2
+};
+
+// =============================================================================
+// HNSW Index Configuration
+// =============================================================================
+
+/**
+ * HNSW index search parameters for pgvector.
+ * iterative_scan (pgvector 0.8.0+) prevents under-fetching when post-filter
+ * selectivity (persona_id + user_id) reduces candidates below LIMIT.
+ */
+export const HNSW_CONFIG = {
+  /** Iterative scan mode: 'off' | 'strict_order' | 'relaxed_order' */
+  ITERATIVE_SCAN: 'relaxed_order',
+  /** Dynamic candidate list size (default pgvector: 40) */
+  EF_SEARCH: 40
+};
+
+// =============================================================================
+// Memory Orchestrator
+// =============================================================================
+
+/**
+ * Memory orchestrator configuration for context assembly.
+ */
+export const MEMORY_ORCHESTRATOR = {
+  /** Max memories returned per retrieval query */
+  RETRIEVAL_LIMIT: 10,
+  /** Max persona memories fetched independently */
+  PERSONA_MEMORY_LIMIT: 5
+};
+
+// =============================================================================
+// Setting Purge
+// =============================================================================
+
+/**
+ * Stale settings purge configuration.
+ */
+export const PURGE_CONFIG = {
+  /** Interval between purge attempts (ms) — 6 hours */
+  INTERVAL_MS: 6 * 60 * 60 * 1000
+};
+
+// =============================================================================
+// Embedding Provider (Docker Model Runner)
+// =============================================================================
+
+/**
+ * Embedding provider configuration for Docker Model Runner.
+ * Circuit breaker pattern prevents hammering a down service.
+ */
+export const EMBEDDING_PROVIDER = {
+  /** Docker Model Runner endpoint */
+  API_URL: process.env.EMBEDDING_API_URL || 'http://localhost:12434/engines/v1/embeddings',
+  /** Model identifier */
+  MODEL: 'hf.co/second-state/All-MiniLM-L6-v2-Embedding-GGUF',
+  /** Max input text length (chars) */
+  TEXT_LIMIT: 8000,
+  /** Minimum text length to generate embedding */
+  MIN_TEXT_LENGTH: 10,
+  /** Request timeout (ms) */
+  TIMEOUT_MS: 5000,
+  /** Consecutive failures before circuit opens */
+  FAILURE_THRESHOLD: 3,
+  /** Cooldown before retrying after circuit opens (ms) */
+  COOLDOWN_MS: 60_000
+};
+
+// =============================================================================
+// Neo4j Graph Database
+// =============================================================================
+
+/**
+ * Neo4j connection configuration.
+ */
+export const NEO4J_CONFIG = {
+  /** Default Neo4j URI (bolt protocol) */
+  DEFAULT_URI: 'bolt://localhost:7687',
+  /** Default Neo4j user */
+  DEFAULT_USER: 'neo4j',
+  /** Query timeout (ms) — prevents runaway traversals */
+  QUERY_TIMEOUT_MS: 10_000,
+  /** Max users synced in parallel per batch */
+  SYNC_BATCH_SIZE: 10
 };

@@ -88,3 +88,4 @@ Se a pergunta não faz sentido para a persona:
 ## Aplicação
 
 Este estilo é injetado automaticamente quando qualquer skill de persona é invocada.
+

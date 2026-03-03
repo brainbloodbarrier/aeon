@@ -88,7 +88,7 @@ cp .env.example .env
 
 # Edit with your configuration
 # Required: DB_PASSWORD
-# Optional: NEO4J_PASSWORD, OPENAI_API_KEY
+# Optional: NEO4J_PASSWORD, EMBEDDING_API_URL
 ```
 
 ## Usage Commands
