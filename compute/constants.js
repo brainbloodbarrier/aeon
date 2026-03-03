@@ -618,6 +618,19 @@ export const SEMANTIC_SEARCH = {
   IMPORTANCE_WEIGHT: 0.4,
 };
 
+/**
+ * Reciprocal Rank Fusion (RRF) configuration for hybrid memory search.
+ * RRF merges two ranked lists (vector similarity + importance) using
+ * 1/(k + rank) scoring, enabling each sub-query to use bare ORDER BY
+ * operators that leverage HNSW indexes.
+ */
+export const RRF_CONFIG = {
+  /** RRF smoothing constant (standard default) */
+  K: 60,
+  /** Fetch N x LIMIT per CTE for better rank overlap */
+  OVER_FETCH_MULTIPLIER: 2
+};
+
 // =============================================================================
 // Memory Orchestrator
 // =============================================================================

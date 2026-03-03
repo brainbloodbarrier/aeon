@@ -10,21 +10,12 @@
  * Feature: 002-invisible-infrastructure
  */
 
-import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
 import { generateEmbedding } from './embedding-provider.js';
+import { hybridMemorySearch } from './memory-retrieval.js';
 import { getPersonaMemories, framePersonaMemories } from './persona-memory.js';
 import { attemptSurface, framePreteriteContext } from './preterite-memory.js';
-import { SEMANTIC_SEARCH, MEMORY_ORCHESTRATOR } from './constants.js';
-
-/**
- * Get database connection pool.
- *
- * @returns {Pool} PostgreSQL connection pool
- */
-function getPool() {
-  return getSharedPool();
-}
+import { MEMORY_ORCHESTRATOR } from './constants.js';
 
 /**
  * Estimate token count for a text string.
@@ -83,66 +74,29 @@ export async function safeMemoryRetrieval(personaId, userId, query, sessionId) {
   const startTime = Date.now();
 
   try {
-    const db = getPool();
-    let strategy = 'importance_and_recency';
-    let result;
-
-    // Try hybrid retrieval if we can generate an embedding for the query
+    // Generate embedding for the query (may return null if service is down)
     const queryEmbedding = await generateEmbedding(query);
 
-    if (queryEmbedding) {
-      // Hybrid: semantic similarity + importance weighting.
-      // Constants interpolated directly (not user input); parameterizing
-      // LIMIT and numeric weights degrades PG query planning.
-      result = await db.query(
-        `SELECT id, memory_type, content, importance_score, created_at,
-           (${SEMANTIC_SEARCH.SEMANTIC_WEIGHT} * (1.0 - (embedding <=> $3::vector)) + ${SEMANTIC_SEARCH.IMPORTANCE_WEIGHT} * importance_score) AS hybrid_score
-         FROM memories
-         WHERE persona_id = $1 AND user_id = $2 AND embedding IS NOT NULL
-         ORDER BY hybrid_score DESC
-         LIMIT ${MEMORY_ORCHESTRATOR.RETRIEVAL_LIMIT}`,
-        [personaId, userId, JSON.stringify(queryEmbedding)]
-      );
-      strategy = 'hybrid';
-
-      // If no embedded memories exist yet, fall back to importance+recency
-      if (result.rows.length === 0) {
-        result = await db.query(
-          `SELECT id, memory_type, content, importance_score, created_at
-           FROM memories
-           WHERE persona_id = $1 AND user_id = $2
-           ORDER BY importance_score DESC, created_at DESC
-           LIMIT ${MEMORY_ORCHESTRATOR.RETRIEVAL_LIMIT}`,
-          [personaId, userId]
-        );
-        strategy = 'hybrid_fallback_to_importance';
-      }
-    } else {
-      // No embedding available — use importance+recency
-      result = await db.query(
-        `SELECT id, memory_type, content, importance_score, created_at
-         FROM memories
-         WHERE persona_id = $1 AND user_id = $2
-         ORDER BY importance_score DESC, created_at DESC
-         LIMIT ${MEMORY_ORCHESTRATOR.RETRIEVAL_LIMIT}`,
-        [personaId, userId]
-      );
-    }
+    // Delegate to canonical RRF-based hybrid search in memory-retrieval.js
+    const { rows, strategy } = await hybridMemorySearch(
+      personaId, userId, queryEmbedding,
+      { limit: MEMORY_ORCHESTRATOR.RETRIEVAL_LIMIT }
+    );
 
     await logOperation('memory_retrieval', {
       sessionId,
       personaId,
       userId,
       details: {
-        memories_selected: result.rows.length,
-        total_available: result.rows.length,
+        memories_selected: rows.length,
+        total_available: rows.length,
         selection_strategy: strategy
       },
       durationMs: Date.now() - startTime,
       success: true
     });
 
-    return result.rows;
+    return rows;
   } catch (error) {
     await logOperation('error_graceful', {
       sessionId,

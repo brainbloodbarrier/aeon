@@ -1,5 +1,5 @@
 /**
- * Unit tests for memory-retrieval.js — semantic search
+ * Unit tests for memory-retrieval.js — RRF hybrid search + semantic search
  * Constitution Principle IV: Relationship Continuity
  */
 
@@ -29,7 +29,7 @@ jest.unstable_mockModule('../../compute/embedding-provider.js', () => ({
 }));
 
 // Import module AFTER mock setup
-const { searchByEmbedding, selectMemories } = await import('../../compute/memory-retrieval.js');
+const { searchByEmbedding, selectMemories, hybridMemorySearch } = await import('../../compute/memory-retrieval.js');
 const { logOperation } = await import('../../compute/operator-logger.js');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -38,15 +38,14 @@ const { logOperation } = await import('../../compute/operator-logger.js');
 
 const FAKE_EMBEDDING = Array(384).fill(0.01);
 
-const MOCK_SEMANTIC_ROWS = [
+const MOCK_RRF_ROWS = [
   {
     id: 'mem-1',
     memory_type: 'interaction',
     content: 'They discussed existential philosophy.',
     importance_score: 0.8,
     created_at: '2025-01-15T00:00:00Z',
-    similarity: 0.92,
-    hybrid_score: 0.87
+    rrf_score: 0.032
   },
   {
     id: 'mem-2',
@@ -54,14 +53,23 @@ const MOCK_SEMANTIC_ROWS = [
     content: 'They prefer direct communication.',
     importance_score: 0.7,
     created_at: '2025-01-10T00:00:00Z',
-    similarity: 0.85,
-    hybrid_score: 0.79
+    rrf_score: 0.031
+  }
+];
+
+const MOCK_IMPORTANCE_ROWS = [
+  {
+    id: 'mem-3',
+    memory_type: 'learning',
+    content: 'They work as a philosopher at the university.',
+    importance_score: 0.6,
+    created_at: '2025-01-12T00:00:00Z'
   }
 ];
 
 const MOCK_TEXT_ROWS = [
   {
-    id: 'mem-3',
+    id: 'mem-4',
     memory_type: 'learning',
     content: 'They work as a philosopher at the university.',
     importance_score: 0.6,
@@ -74,19 +82,130 @@ const MOCK_TEXT_ROWS = [
 // Tests
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('Memory Retrieval — Semantic Search', () => {
+describe('Memory Retrieval — RRF Hybrid Search', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   // ═════════════════════════════════════════════════════════════════════════
-  // searchByEmbedding — semantic path
+  // hybridMemorySearch — core RRF function
+  // ═════════════════════════════════════════════════════════════════════════
+
+  describe('hybridMemorySearch', () => {
+    it('should use RRF CTEs with vector_search and importance_search when embedding provided', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: MOCK_RRF_ROWS });
+
+      const result = await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING);
+
+      expect(result.strategy).toBe('rrf_hybrid');
+      expect(result.rows).toHaveLength(2);
+      expect(result.rows[0].id).toBe('mem-1');
+
+      // Verify the SQL contains the RRF CTEs
+      const sql = mockQuery.mock.calls[0][0];
+      expect(sql).toContain('vector_search');
+      expect(sql).toContain('importance_search');
+      expect(sql).toContain('FULL OUTER JOIN');
+      expect(sql).toContain('rrf_score');
+      // Verify bare ORDER BY for HNSW index usage
+      expect(sql).toContain('ORDER BY embedding <=> $3::vector');
+      expect(sql).toContain('ORDER BY importance_score DESC, created_at DESC');
+    });
+
+    it('should pass personaId, userId, and embedding as query params', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: MOCK_RRF_ROWS });
+
+      await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING);
+
+      const params = mockQuery.mock.calls[0][1];
+      expect(params[0]).toBe('persona-1');
+      expect(params[1]).toBe('user-1');
+      expect(params[2]).toBe(JSON.stringify(FAKE_EMBEDDING));
+    });
+
+    it('should fall back to importance+recency when queryEmbedding is null', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: MOCK_IMPORTANCE_ROWS });
+
+      const result = await hybridMemorySearch('persona-1', 'user-1', null);
+
+      expect(result.strategy).toBe('importance_recency');
+      expect(result.rows).toHaveLength(1);
+
+      // Verify simple importance+recency query (no CTEs)
+      const sql = mockQuery.mock.calls[0][0];
+      expect(sql).toContain('ORDER BY importance_score DESC, created_at DESC');
+      expect(sql).not.toContain('vector_search');
+    });
+
+    it('should fall back to importance+recency when RRF returns empty rows', async () => {
+      // First call: RRF returns empty
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+      // Second call: importance fallback returns data
+      mockQuery.mockResolvedValueOnce({ rows: MOCK_IMPORTANCE_ROWS });
+
+      const result = await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING);
+
+      expect(result.strategy).toBe('rrf_fallback_to_importance');
+      expect(result.rows).toHaveLength(1);
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+    });
+
+    it('should respect custom limit option', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [MOCK_RRF_ROWS[0]] });
+
+      await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING, { limit: 5 });
+
+      const sql = mockQuery.mock.calls[0][0];
+      // Final LIMIT should be 5
+      expect(sql).toMatch(/ORDER BY rrf_score DESC\s+LIMIT 5/);
+      // Over-fetch should be 5 * 2 = 10
+      expect(sql).toMatch(/LIMIT 10\s/);
+    });
+
+    it('should respect custom rrf_k option', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: MOCK_RRF_ROWS });
+
+      await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING, { rrf_k: 30 });
+
+      const sql = mockQuery.mock.calls[0][0];
+      expect(sql).toContain('1.0 / (30 + v.rank)');
+      expect(sql).toContain('1.0 / (30 + i.rank)');
+    });
+
+    it('should respect custom overFetchMultiplier option', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: MOCK_RRF_ROWS });
+
+      await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING, {
+        limit: 10,
+        overFetchMultiplier: 3
+      });
+
+      const sql = mockQuery.mock.calls[0][0];
+      // Over-fetch: 10 * 3 = 30
+      expect(sql).toMatch(/LIMIT 30\s/);
+    });
+
+    it('should return empty rows with fallback strategy when both RRF and fallback return empty', async () => {
+      // RRF returns empty
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+      // Fallback also returns empty
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING);
+
+      expect(result.strategy).toBe('rrf_fallback_to_importance');
+      expect(result.rows).toEqual([]);
+    });
+  });
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // searchByEmbedding — public API (delegates to hybridMemorySearch)
   // ═════════════════════════════════════════════════════════════════════════
 
   describe('searchByEmbedding', () => {
-    it('should perform semantic search when embedding generation succeeds', async () => {
+    it('should perform RRF hybrid search when embedding generation succeeds', async () => {
       mockGenerateEmbedding.mockResolvedValueOnce(FAKE_EMBEDDING);
-      mockQuery.mockResolvedValueOnce({ rows: MOCK_SEMANTIC_ROWS });
+      mockQuery.mockResolvedValueOnce({ rows: MOCK_RRF_ROWS });
 
       const results = await searchByEmbedding('existential philosophy', {
         personaId: 'persona-1',
@@ -95,12 +214,12 @@ describe('Memory Retrieval — Semantic Search', () => {
 
       expect(results).toHaveLength(2);
       expect(results[0].id).toBe('mem-1');
-      expect(results[0].similarity).toBe(0.92);
       expect(mockGenerateEmbedding).toHaveBeenCalledWith('existential philosophy');
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('<=>'),
-        expect.arrayContaining(['persona-1', 'user-1'])
-      );
+
+      // Should use RRF CTEs
+      const sql = mockQuery.mock.calls[0][0];
+      expect(sql).toContain('vector_search');
+      expect(sql).toContain('importance_search');
     });
 
     it('should fall back to text search when embedding generation returns null', async () => {
@@ -114,7 +233,7 @@ describe('Memory Retrieval — Semantic Search', () => {
       });
 
       expect(results).toHaveLength(1);
-      expect(results[0].id).toBe('mem-3');
+      expect(results[0].id).toBe('mem-4');
 
       // Should log fallback
       expect(logOperation).toHaveBeenCalledWith(
@@ -147,14 +266,16 @@ describe('Memory Retrieval — Semantic Search', () => {
       );
     });
 
-    it('should return empty array when no results match similarity threshold', async () => {
+    it('should return empty array when RRF returns no results', async () => {
       mockGenerateEmbedding.mockResolvedValueOnce(FAKE_EMBEDDING);
+      // RRF returns empty
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+      // Fallback also returns empty
       mockQuery.mockResolvedValueOnce({ rows: [] });
 
       const results = await searchByEmbedding('completely unrelated topic', {
         personaId: 'persona-1',
-        userId: 'user-1',
-        minSimilarity: 0.9
+        userId: 'user-1'
       });
 
       expect(results).toEqual([]);
@@ -162,7 +283,7 @@ describe('Memory Retrieval — Semantic Search', () => {
 
     it('should respect limit option', async () => {
       mockGenerateEmbedding.mockResolvedValueOnce(FAKE_EMBEDDING);
-      mockQuery.mockResolvedValueOnce({ rows: [MOCK_SEMANTIC_ROWS[0]] });
+      mockQuery.mockResolvedValueOnce({ rows: [MOCK_RRF_ROWS[0]] });
 
       await searchByEmbedding('philosophy', {
         personaId: 'persona-1',
@@ -170,15 +291,13 @@ describe('Memory Retrieval — Semantic Search', () => {
         limit: 1
       });
 
-      // The LIMIT parameter is the last one in the query
-      const queryCall = mockQuery.mock.calls[0];
-      const params = queryCall[1];
-      expect(params[params.length - 1]).toBe(1);
+      const sql = mockQuery.mock.calls[0][0];
+      expect(sql).toMatch(/ORDER BY rrf_score DESC\s+LIMIT 1/);
     });
 
     it('should use importance+recency fallback when query has no meaningful keywords', async () => {
       mockGenerateEmbedding.mockResolvedValueOnce(null);
-      mockQuery.mockResolvedValueOnce({ rows: MOCK_TEXT_ROWS });
+      mockQuery.mockResolvedValueOnce({ rows: MOCK_IMPORTANCE_ROWS });
 
       await searchByEmbedding('ok', {
         personaId: 'persona-1',
@@ -215,7 +334,7 @@ describe('Memory Retrieval — Semantic Search', () => {
 
     it('should log semantic_search operation on success', async () => {
       mockGenerateEmbedding.mockResolvedValueOnce(FAKE_EMBEDDING);
-      mockQuery.mockResolvedValueOnce({ rows: MOCK_SEMANTIC_ROWS });
+      mockQuery.mockResolvedValueOnce({ rows: MOCK_RRF_ROWS });
 
       await searchByEmbedding('philosophy', {
         personaId: 'persona-1',
@@ -230,7 +349,7 @@ describe('Memory Retrieval — Semantic Search', () => {
           personaId: 'persona-1',
           userId: 'user-1',
           details: expect.objectContaining({
-            strategy: 'embedding',
+            strategy: 'rrf_hybrid',
             results_count: 2
           }),
           success: true
@@ -241,18 +360,17 @@ describe('Memory Retrieval — Semantic Search', () => {
     it('should use default options when none provided', async () => {
       mockGenerateEmbedding.mockResolvedValueOnce(FAKE_EMBEDDING);
       mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockQuery.mockResolvedValueOnce({ rows: [] });
 
       await searchByEmbedding('test query', {
         personaId: 'persona-1',
         userId: 'user-1'
       });
 
-      // Should use DEFAULT_LIMIT (10) and MIN_SIMILARITY (0.3)
-      const queryCall = mockQuery.mock.calls[0];
-      const params = queryCall[1];
-      // params: [personaId, userId, embedding, minSimilarity, limit]
-      expect(params[3]).toBe(0.3);   // MIN_SIMILARITY
-      expect(params[4]).toBe(10);    // DEFAULT_LIMIT
+      // Default limit = 10, so over-fetch = 20
+      const sql = mockQuery.mock.calls[0][0];
+      expect(sql).toMatch(/LIMIT 20\s/); // overFetchLimit
+      expect(sql).toMatch(/ORDER BY rrf_score DESC\s+LIMIT 10/); // final limit
     });
   });
 
