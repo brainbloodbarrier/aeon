@@ -38,6 +38,20 @@ const { logOperation } = await import('../../compute/operator-logger.js');
 
 const FAKE_EMBEDDING = Array(384).fill(0.01);
 
+/**
+ * Setup mockQuery responses for withHnswConfig transaction wrapper.
+ * When hybridMemorySearch has an embedding, it wraps the query in:
+ *   BEGIN -> SET LOCAL hnsw.iterative_scan -> actual query -> COMMIT
+ * When no embedding, importance fallback runs without wrapper.
+ */
+function setupHnswMocks(searchRows) {
+  mockQuery
+    .mockResolvedValueOnce(undefined)  // BEGIN
+    .mockResolvedValueOnce(undefined)  // SET LOCAL hnsw.iterative_scan
+    .mockResolvedValueOnce({ rows: searchRows })  // actual search query
+    .mockResolvedValueOnce(undefined); // COMMIT
+}
+
 const MOCK_RRF_ROWS = [
   {
     id: 'mem-1',
@@ -93,7 +107,7 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
 
   describe('hybridMemorySearch', () => {
     it('should use RRF CTEs with vector_search and importance_search when embedding provided', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: MOCK_RRF_ROWS });
+      setupHnswMocks(MOCK_RRF_ROWS);
 
       const result = await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING);
 
@@ -101,8 +115,8 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
       expect(result.rows).toHaveLength(2);
       expect(result.rows[0].id).toBe('mem-1');
 
-      // Verify the SQL contains the RRF CTEs
-      const sql = mockQuery.mock.calls[0][0];
+      // calls[0]=BEGIN, calls[1]=SET LOCAL, calls[2]=RRF query, calls[3]=COMMIT
+      const sql = mockQuery.mock.calls[2][0];
       expect(sql).toContain('vector_search');
       expect(sql).toContain('importance_search');
       expect(sql).toContain('FULL OUTER JOIN');
@@ -112,12 +126,23 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
       expect(sql).toContain('ORDER BY importance_score DESC, created_at DESC');
     });
 
-    it('should pass personaId, userId, and embedding as query params', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: MOCK_RRF_ROWS });
+    it('should set hnsw.iterative_scan before search query', async () => {
+      setupHnswMocks(MOCK_RRF_ROWS);
 
       await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING);
 
-      const params = mockQuery.mock.calls[0][1];
+      expect(mockQuery.mock.calls[0][0]).toBe('BEGIN');
+      expect(mockQuery.mock.calls[1][0]).toContain('hnsw.iterative_scan');
+      expect(mockQuery.mock.calls[3][0]).toBe('COMMIT');
+    });
+
+    it('should pass personaId, userId, and embedding as query params', async () => {
+      setupHnswMocks(MOCK_RRF_ROWS);
+
+      await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING);
+
+      // RRF query is at index 2
+      const params = mockQuery.mock.calls[2][1];
       expect(params[0]).toBe('persona-1');
       expect(params[1]).toBe('user-1');
       expect(params[2]).toBe(JSON.stringify(FAKE_EMBEDDING));
@@ -138,24 +163,25 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
     });
 
     it('should fall back to importance+recency when RRF returns empty rows', async () => {
-      // First call: RRF returns empty
-      mockQuery.mockResolvedValueOnce({ rows: [] });
-      // Second call: importance fallback returns data
+      // withHnswConfig: BEGIN, SET LOCAL, RRF (empty), COMMIT
+      setupHnswMocks([]);
+      // Then importance fallback (outside transaction)
       mockQuery.mockResolvedValueOnce({ rows: MOCK_IMPORTANCE_ROWS });
 
       const result = await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING);
 
       expect(result.strategy).toBe('rrf_fallback_to_importance');
       expect(result.rows).toHaveLength(1);
-      expect(mockQuery).toHaveBeenCalledTimes(2);
+      // 4 from withHnswConfig + 1 from fallback
+      expect(mockQuery).toHaveBeenCalledTimes(5);
     });
 
     it('should respect custom limit option', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [MOCK_RRF_ROWS[0]] });
+      setupHnswMocks([MOCK_RRF_ROWS[0]]);
 
       await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING, { limit: 5 });
 
-      const sql = mockQuery.mock.calls[0][0];
+      const sql = mockQuery.mock.calls[2][0];
       // Final LIMIT should be 5
       expect(sql).toMatch(/ORDER BY rrf_score DESC\s+LIMIT 5/);
       // Over-fetch should be 5 * 2 = 10
@@ -163,31 +189,43 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
     });
 
     it('should respect custom rrf_k option', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: MOCK_RRF_ROWS });
+      setupHnswMocks(MOCK_RRF_ROWS);
 
       await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING, { rrf_k: 30 });
 
-      const sql = mockQuery.mock.calls[0][0];
+      const sql = mockQuery.mock.calls[2][0];
       expect(sql).toContain('1.0 / (30 + v.rank)');
       expect(sql).toContain('1.0 / (30 + i.rank)');
     });
 
     it('should respect custom overFetchMultiplier option', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: MOCK_RRF_ROWS });
+      setupHnswMocks(MOCK_RRF_ROWS);
 
       await hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING, {
         limit: 10,
         overFetchMultiplier: 3
       });
 
-      const sql = mockQuery.mock.calls[0][0];
+      const sql = mockQuery.mock.calls[2][0];
       // Over-fetch: 10 * 3 = 30
       expect(sql).toMatch(/LIMIT 30\s/);
     });
 
+    it('should ROLLBACK on query error inside withHnswConfig', async () => {
+      mockQuery
+        .mockResolvedValueOnce(undefined)  // BEGIN
+        .mockResolvedValueOnce(undefined)  // SET LOCAL
+        .mockRejectedValueOnce(new Error('query failed'))  // RRF query fails
+        .mockResolvedValueOnce(undefined); // ROLLBACK
+
+      await expect(hybridMemorySearch('persona-1', 'user-1', FAKE_EMBEDDING))
+        .rejects.toThrow('query failed');
+      expect(mockQuery.mock.calls[3][0]).toBe('ROLLBACK');
+    });
+
     it('should return empty rows with fallback strategy when both RRF and fallback return empty', async () => {
-      // RRF returns empty
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+      // RRF returns empty (wrapped in transaction)
+      setupHnswMocks([]);
       // Fallback also returns empty
       mockQuery.mockResolvedValueOnce({ rows: [] });
 
@@ -205,7 +243,7 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
   describe('searchByEmbedding', () => {
     it('should perform RRF hybrid search when embedding generation succeeds', async () => {
       mockGenerateEmbedding.mockResolvedValueOnce(FAKE_EMBEDDING);
-      mockQuery.mockResolvedValueOnce({ rows: MOCK_RRF_ROWS });
+      setupHnswMocks(MOCK_RRF_ROWS);
 
       const results = await searchByEmbedding('existential philosophy', {
         personaId: 'persona-1',
@@ -216,8 +254,8 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
       expect(results[0].id).toBe('mem-1');
       expect(mockGenerateEmbedding).toHaveBeenCalledWith('existential philosophy');
 
-      // Should use RRF CTEs
-      const sql = mockQuery.mock.calls[0][0];
+      // Should use RRF CTEs (index 2 = actual search query)
+      const sql = mockQuery.mock.calls[2][0];
       expect(sql).toContain('vector_search');
       expect(sql).toContain('importance_search');
     });
@@ -268,8 +306,8 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
 
     it('should return empty array when RRF returns no results', async () => {
       mockGenerateEmbedding.mockResolvedValueOnce(FAKE_EMBEDDING);
-      // RRF returns empty
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+      // RRF returns empty (wrapped in transaction)
+      setupHnswMocks([]);
       // Fallback also returns empty
       mockQuery.mockResolvedValueOnce({ rows: [] });
 
@@ -283,7 +321,7 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
 
     it('should respect limit option', async () => {
       mockGenerateEmbedding.mockResolvedValueOnce(FAKE_EMBEDDING);
-      mockQuery.mockResolvedValueOnce({ rows: [MOCK_RRF_ROWS[0]] });
+      setupHnswMocks([MOCK_RRF_ROWS[0]]);
 
       await searchByEmbedding('philosophy', {
         personaId: 'persona-1',
@@ -291,7 +329,7 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
         limit: 1
       });
 
-      const sql = mockQuery.mock.calls[0][0];
+      const sql = mockQuery.mock.calls[2][0];
       expect(sql).toMatch(/ORDER BY rrf_score DESC\s+LIMIT 1/);
     });
 
@@ -313,7 +351,11 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
 
     it('should return empty array on database error', async () => {
       mockGenerateEmbedding.mockResolvedValueOnce(FAKE_EMBEDDING);
-      mockQuery.mockRejectedValueOnce(new Error('connection refused'));
+      // BEGIN succeeds but SET LOCAL fails
+      mockQuery
+        .mockResolvedValueOnce(undefined)  // BEGIN
+        .mockRejectedValueOnce(new Error('connection refused'))  // SET LOCAL fails
+        .mockResolvedValueOnce(undefined); // ROLLBACK
 
       const results = await searchByEmbedding('test', {
         personaId: 'persona-1',
@@ -334,7 +376,7 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
 
     it('should log semantic_search operation on success', async () => {
       mockGenerateEmbedding.mockResolvedValueOnce(FAKE_EMBEDDING);
-      mockQuery.mockResolvedValueOnce({ rows: MOCK_RRF_ROWS });
+      setupHnswMocks(MOCK_RRF_ROWS);
 
       await searchByEmbedding('philosophy', {
         personaId: 'persona-1',
@@ -359,7 +401,9 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
 
     it('should use default options when none provided', async () => {
       mockGenerateEmbedding.mockResolvedValueOnce(FAKE_EMBEDDING);
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+      // RRF empty (wrapped in transaction)
+      setupHnswMocks([]);
+      // Fallback empty
       mockQuery.mockResolvedValueOnce({ rows: [] });
 
       await searchByEmbedding('test query', {
@@ -367,8 +411,8 @@ describe('Memory Retrieval — RRF Hybrid Search', () => {
         userId: 'user-1'
       });
 
-      // Default limit = 10, so over-fetch = 20
-      const sql = mockQuery.mock.calls[0][0];
+      // Default limit = 10, so over-fetch = 20 (index 2 = RRF query)
+      const sql = mockQuery.mock.calls[2][0];
       expect(sql).toMatch(/LIMIT 20\s/); // overFetchLimit
       expect(sql).toMatch(/ORDER BY rrf_score DESC\s+LIMIT 10/); // final limit
     });

@@ -632,6 +632,22 @@ export const RRF_CONFIG = {
 };
 
 // =============================================================================
+// HNSW Index Configuration
+// =============================================================================
+
+/**
+ * HNSW index search parameters for pgvector.
+ * iterative_scan (pgvector 0.8.0+) prevents under-fetching when post-filter
+ * selectivity (persona_id + user_id) reduces candidates below LIMIT.
+ */
+export const HNSW_CONFIG = {
+  /** Iterative scan mode: 'off' | 'strict_order' | 'relaxed_order' */
+  ITERATIVE_SCAN: 'relaxed_order',
+  /** Dynamic candidate list size (default pgvector: 40) */
+  EF_SEARCH: 40
+};
+
+// =============================================================================
 // Memory Orchestrator
 // =============================================================================
 

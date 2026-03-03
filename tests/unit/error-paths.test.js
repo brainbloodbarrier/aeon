@@ -313,16 +313,21 @@ describe('Cross-module error paths', () => {
       it('falls back to importance query when hybrid returns empty rows', async () => {
         const fakeEmbed = Array(384).fill(0.01);
         mockGenerateEmbedding.mockResolvedValueOnce(fakeEmbed);
-        // First query (hybrid) returns empty
-        mockQuery.mockResolvedValueOnce({ rows: [] });
-        // Second query (importance fallback) returns data
+        // withHnswConfig transaction wrapper: BEGIN, SET LOCAL, RRF query, COMMIT
+        mockQuery
+          .mockResolvedValueOnce(undefined)              // BEGIN
+          .mockResolvedValueOnce(undefined)              // SET LOCAL hnsw.iterative_scan
+          .mockResolvedValueOnce({ rows: [] })           // RRF query returns empty
+          .mockResolvedValueOnce(undefined);             // COMMIT
+        // Fallback importance+recency query returns data
         const fallbackRows = [{ id: 'm2', content: 'fallback', importance_score: 0.7 }];
         mockQuery.mockResolvedValueOnce({ rows: fallbackRows });
 
         const result = await safeMemoryRetrieval('p1', 'u1', 'query', 's1');
 
         expect(result).toEqual(fallbackRows);
-        expect(mockQuery).toHaveBeenCalledTimes(2);
+        // BEGIN + SET LOCAL + RRF + COMMIT + fallback = 5
+        expect(mockQuery).toHaveBeenCalledTimes(5);
       });
 
       it('returns empty array when embedding generation throws', async () => {

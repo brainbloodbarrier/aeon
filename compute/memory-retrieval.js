@@ -18,7 +18,7 @@
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
 import { generateEmbedding } from './embedding-provider.js';
-import { SEMANTIC_SEARCH, RRF_CONFIG } from './constants.js';
+import { SEMANTIC_SEARCH, RRF_CONFIG, HNSW_CONFIG } from './constants.js';
 
 /**
  * Get database connection pool.
@@ -27,6 +27,34 @@ import { SEMANTIC_SEARCH, RRF_CONFIG } from './constants.js';
  */
 function getPool() {
   return getSharedPool();
+}
+
+/**
+ * Execute a query function within a transaction that sets optimal HNSW index
+ * parameters via SET LOCAL (scoped to the current transaction only).
+ *
+ * pgvector 0.8.0+ iterative_scan prevents under-fetching when post-filter
+ * selectivity (e.g. persona_id + user_id) reduces candidates below LIMIT.
+ *
+ * @param {Object} db - PostgreSQL pool/client with query() method
+ * @param {Function} queryFn - Async function that performs the actual search query
+ * @returns {Promise<*>} Result of queryFn
+ * @private
+ */
+async function withHnswConfig(db, queryFn) {
+  await db.query('BEGIN');
+  try {
+    await db.query(`SET LOCAL hnsw.iterative_scan = '${HNSW_CONFIG.ITERATIVE_SCAN}'`);
+    if (HNSW_CONFIG.EF_SEARCH !== 40) {
+      await db.query(`SET LOCAL hnsw.ef_search = ${HNSW_CONFIG.EF_SEARCH}`);
+    }
+    const result = await queryFn();
+    await db.query('COMMIT');
+    return result;
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  }
 }
 
 /**
@@ -75,12 +103,13 @@ export async function hybridMemorySearch(personaId, userId, queryEmbedding, opti
 
   // RRF: Two separate ranked lists fused by reciprocal rank.
   // Each CTE uses a bare ORDER BY that enables HNSW index usage.
+  // Wrapped in withHnswConfig to set iterative_scan for filtered queries.
   //
   // overFetchLimit, rrf_k, and limit are all numeric constants derived from
   // RRF_CONFIG / SEMANTIC_SEARCH (not user input) — template literal
   // interpolation is correct and intentional; parameterizing them would
   // degrade PG query planning with no security benefit.
-  const result = await db.query(
+  const result = await withHnswConfig(db, () => db.query(
     `WITH vector_search AS (
         SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $3::vector) AS rank
         FROM memories
@@ -103,7 +132,7 @@ export async function hybridMemorySearch(personaId, userId, queryEmbedding, opti
      ORDER BY rrf_score DESC
      LIMIT ${limit}`,
     [personaId, userId, JSON.stringify(queryEmbedding)]
-  );
+  ));
 
   // If RRF returned nothing (brand new user), fallback to importance+recency
   if (result.rows.length === 0) {
