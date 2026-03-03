@@ -24,7 +24,7 @@ jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
 }));
 
 const mockGenerateEmbedding = jest.fn();
-jest.unstable_mockModule('../../compute/memory-extractor.js', () => ({
+jest.unstable_mockModule('../../compute/embedding-provider.js', () => ({
   generateEmbedding: mockGenerateEmbedding
 }));
 
@@ -36,7 +36,7 @@ const { logOperation } = await import('../../compute/operator-logger.js');
 // Test Data
 // ═══════════════════════════════════════════════════════════════════════════
 
-const FAKE_EMBEDDING = Array(1536).fill(0.01);
+const FAKE_EMBEDDING = Array(384).fill(0.01);
 
 const MOCK_SEMANTIC_ROWS = [
   {

@@ -23,6 +23,10 @@ jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
   logOperation: jest.fn().mockResolvedValue(undefined)
 }));
 
+jest.unstable_mockModule('../../compute/embedding-provider.js', () => ({
+  generateEmbedding: jest.fn().mockResolvedValue(null)
+}));
+
 // Import after mocking
 const {
   analyzeForMemories,

@@ -19,6 +19,7 @@ import { frameMemories } from './memory-framing.js';
 import { generateBehavioralHints } from './relationship-shaper.js';
 import { logOperation, logOperationBatch } from './operator-logger.js';
 import { ensureRelationship, updateFamiliarity } from './relationship-tracker.js';
+import { safeGraphSync } from './graph-sync.js';
 import { extractSessionMemories, storeSessionMemories } from './memory-extractor.js';
 import { compileUserSetting } from './setting-preserver.js';
 import { extractAndSaveSettings } from './setting-extractor.js';
@@ -33,7 +34,7 @@ import { classifyMemoryElection, consignToPreterite } from './preterite-memory.j
 // Pynchon Layer Phase 2: Narrative Gravity (session completion only)
 import { updateArc } from './narrative-gravity.js';
 import { validatePersonaName } from './persona-validator.js';
-import { CONTEXT_BUDGET } from './constants.js';
+import { CONTEXT_BUDGET, ARC_PHASES, PURGE_CONFIG } from './constants.js';
 import { purgeStaleSettings } from '../scripts/purge-settings.js';
 
 // Sub-orchestrator imports
@@ -76,7 +77,7 @@ function getPool() {
 // ===================================================================
 
 /** Interval between automatic purge runs (6 hours in ms). */
-const PURGE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const PURGE_INTERVAL_MS = PURGE_CONFIG.INTERVAL_MS;
 
 /** Timestamp of the last purge attempt. Starts at 0 to trigger on first eligible call. */
 let lastPurgeTime = 0;
@@ -135,7 +136,7 @@ async function safeRelationshipFetch(personaId, userId, sessionId) {
     // ensureRelationship creates the record if missing (INSERT ON CONFLICT)
     const relationship = await ensureRelationship(userId, personaId);
 
-    await logOperation('relationship_fetch', {
+    logOperation('relationship_fetch', {
       sessionId,
       personaId,
       userId,
@@ -147,7 +148,7 @@ async function safeRelationshipFetch(personaId, userId, sessionId) {
       },
       durationMs: Date.now() - startTime,
       success: true
-    });
+    }).catch(() => {});
 
     // Map to expected format for downstream consumers
     return {
@@ -158,7 +159,7 @@ async function safeRelationshipFetch(personaId, userId, sessionId) {
       memorable_exchanges: relationship.memorableExchanges
     };
   } catch (error) {
-    await logOperation('error_graceful', {
+    logOperation('error_graceful', {
       sessionId,
       personaId,
       userId,
@@ -169,7 +170,7 @@ async function safeRelationshipFetch(personaId, userId, sessionId) {
       },
       durationMs: Date.now() - startTime,
       success: false
-    });
+    }).catch(() => {});
 
     return { ...DEFAULT_RELATIONSHIP };
   }
@@ -217,7 +218,7 @@ async function safePersonaRelationsFetch(personaId, relevantPersonaIds = null, s
       return `You ${affinityWord} ${r.personaName}.`;
     });
 
-    await logOperation('persona_relations_fetch', {
+    logOperation('persona_relations_fetch', {
       sessionId,
       personaId,
       details: {
@@ -226,11 +227,11 @@ async function safePersonaRelationsFetch(personaId, relevantPersonaIds = null, s
       },
       durationMs: Date.now() - startTime,
       success: true
-    });
+    }).catch(() => {});
 
     return frames.join(' ');
   } catch (error) {
-    await logOperation('error_graceful', {
+    logOperation('error_graceful', {
       sessionId,
       personaId,
       details: {
@@ -240,7 +241,7 @@ async function safePersonaRelationsFetch(personaId, relevantPersonaIds = null, s
       },
       durationMs: Date.now() - startTime,
       success: false
-    });
+    }).catch(() => {});
 
     return null;
   }
@@ -742,7 +743,7 @@ export async function completeSession(sessionData) {
     // All session completion operations are wrapped in a transaction.
     // If any operation fails, the entire session completion rolls back.
     // The idempotency check above remains as a secondary guard.
-    return await withTransaction(async (client) => {
+    const txResult = await withTransaction(async (client) => {
       // Update familiarity (may trigger trust level change)
       const relationshipResult = await updateFamiliarity(userId, personaId, sessionQuality, client);
 
@@ -838,7 +839,7 @@ export async function completeSession(sessionData) {
           entropy_level: entropyResult?.level || null,
           entropy_state: entropyResult?.state || null,
           // Phase 2
-          arc_phase: arcResult?.phase || 'IMPACT'
+          arc_phase: arcResult?.phase || ARC_PHASES.IMPACT
         },
         durationMs: Date.now() - startTime,
         success: true
@@ -852,9 +853,16 @@ export async function completeSession(sessionData) {
         sessionQuality,
         entropyState: entropyResult?.state || null,
         // Phase 2
-        arcPhase: arcResult?.phase || 'IMPACT'
+        arcPhase: arcResult?.phase || ARC_PHASES.IMPACT
       };
     });
+
+    // Graph sync: fire-and-forget outside transaction (only when state changed)
+    if (txResult.relationship?.trustLevelChanged || txResult.memoriesStored > 0) {
+      safeGraphSync(userId).catch(() => {});
+    }
+
+    return txResult;
 
   } catch (error) {
     await logOperation('error_graceful', {

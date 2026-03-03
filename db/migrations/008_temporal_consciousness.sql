@@ -48,6 +48,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Auto-update updated_at on persona_temporal_state
+DROP TRIGGER IF EXISTS persona_temporal_state_updated_at ON persona_temporal_state;
 CREATE TRIGGER persona_temporal_state_updated_at
     BEFORE UPDATE ON persona_temporal_state
     FOR EACH ROW

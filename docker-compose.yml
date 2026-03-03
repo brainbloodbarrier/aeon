@@ -8,7 +8,10 @@
 #   docker compose up -d                    # PostgreSQL only
 #   docker compose --profile graph up -d    # PostgreSQL + Neo4j
 
-version: '3.8'
+# EMBEDDINGS - Docker Model Runner (built into Docker Desktop 4.40+)
+# Pull model: docker model pull hf.co/second-state/All-MiniLM-L6-v2-Embedding-GGUF
+# API: http://localhost:12434/engines/v1/embeddings
+
 
 services:
   # ═══════════════════════════════════════════════════════════════
@@ -50,9 +53,9 @@ services:
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?NEO4J_PASSWORD environment variable is required}
       NEO4J_PLUGINS: '["apoc"]'
-      NEO4J_dbms_memory_pagecache_size: 512M
-      NEO4J_dbms_memory_heap_initial__size: 512M
-      NEO4J_dbms_memory_heap_max__size: 1G
+      NEO4J_dbms_memory_pagecache_size: 256M
+      NEO4J_dbms_memory_heap_initial__size: 256M
+      NEO4J_dbms_memory_heap_max__size: 512M
     volumes:
       - aeon_graph:/data
     ports:

@@ -13,7 +13,7 @@
 
 import { getSharedPool } from './db-pool.js';
 import { logOperation } from './operator-logger.js';
-import { generateEmbedding } from './memory-extractor.js';
+import { generateEmbedding } from './embedding-provider.js';
 import { SEMANTIC_SEARCH } from './constants.js';
 
 /**
@@ -102,7 +102,7 @@ export async function searchByEmbedding(query, options = {}) {
 /**
  * Perform cosine-similarity search using pgvector.
  *
- * @param {number[]} queryEmbedding - 1536-dimension embedding vector
+ * @param {number[]} queryEmbedding - 384-dimension embedding vector
  * @param {Object} opts - Internal options
  * @returns {Promise<Array<Object>>} Matching memories
  * @private

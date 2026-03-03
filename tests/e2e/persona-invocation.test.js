@@ -73,11 +73,20 @@ jest.unstable_mockModule('../../compute/relationship-shaper.js', () => ({
   )
 }));
 
-// Mock memory-extractor (DB + OpenAI dependent)
+// Mock embedding-provider (Docker Model Runner dependent)
+jest.unstable_mockModule('../../compute/embedding-provider.js', () => ({
+  generateEmbedding: jest.fn().mockResolvedValue(null)
+}));
+
+// Mock memory-extractor (DB dependent)
 jest.unstable_mockModule('../../compute/memory-extractor.js', () => ({
   extractSessionMemories: jest.fn().mockResolvedValue([]),
-  storeSessionMemories: jest.fn().mockResolvedValue(undefined),
-  generateEmbedding: jest.fn().mockResolvedValue(null)
+  storeSessionMemories: jest.fn().mockResolvedValue(undefined)
+}));
+
+// Mock graph-sync (Neo4j dependent)
+jest.unstable_mockModule('../../compute/graph-sync.js', () => ({
+  safeGraphSync: jest.fn().mockResolvedValue(null)
 }));
 
 // Mock setting-preserver (DB-dependent)

@@ -48,10 +48,14 @@ jest.unstable_mockModule('../../compute/operator-logger.js', () => ({
   logOperationBatch: mockLogOperationBatch
 }));
 
-// --- memory-extractor mock ---
+// --- embedding-provider mock ---
 const mockGenerateEmbedding = jest.fn().mockResolvedValue(null);
+jest.unstable_mockModule('../../compute/embedding-provider.js', () => ({
+  generateEmbedding: mockGenerateEmbedding
+}));
+
+// --- memory-extractor mock ---
 jest.unstable_mockModule('../../compute/memory-extractor.js', () => ({
-  generateEmbedding: mockGenerateEmbedding,
   extractSessionMemories: jest.fn().mockResolvedValue([]),
   storeSessionMemories: jest.fn().mockResolvedValue(undefined)
 }));
@@ -307,7 +311,7 @@ describe('Cross-module error paths', () => {
       });
 
       it('falls back to importance query when hybrid returns empty rows', async () => {
-        const fakeEmbed = Array(1536).fill(0.01);
+        const fakeEmbed = Array(384).fill(0.01);
         mockGenerateEmbedding.mockResolvedValueOnce(fakeEmbed);
         // First query (hybrid) returns empty
         mockQuery.mockResolvedValueOnce({ rows: [] });

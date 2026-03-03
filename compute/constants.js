@@ -191,9 +191,7 @@ export const MEMORY_FRAMING = {
  * Memory storage limits.
  */
 export const MEMORY_STORAGE = {
-  MAX_BATCH_SIZE: 13000,
-  EMBEDDING_TEXT_LIMIT: 8000,
-  MIN_EMBED_LENGTH: 10
+  MAX_BATCH_SIZE: 10000
 };
 
 /**
@@ -618,8 +616,73 @@ export const SEMANTIC_SEARCH = {
   SEMANTIC_WEIGHT: 0.6,
   /** Weight for importance score in hybrid scoring */
   IMPORTANCE_WEIGHT: 0.4,
-  /** Embedding model identifier */
-  EMBEDDING_MODEL: 'text-embedding-3-small',
-  /** Embedding vector dimensions */
-  EMBEDDING_DIMENSIONS: 1536
+};
+
+// =============================================================================
+// Memory Orchestrator
+// =============================================================================
+
+/**
+ * Memory orchestrator configuration for context assembly.
+ */
+export const MEMORY_ORCHESTRATOR = {
+  /** Max memories returned per retrieval query */
+  RETRIEVAL_LIMIT: 10,
+  /** Max persona memories fetched independently */
+  PERSONA_MEMORY_LIMIT: 5
+};
+
+// =============================================================================
+// Setting Purge
+// =============================================================================
+
+/**
+ * Stale settings purge configuration.
+ */
+export const PURGE_CONFIG = {
+  /** Interval between purge attempts (ms) — 6 hours */
+  INTERVAL_MS: 6 * 60 * 60 * 1000
+};
+
+// =============================================================================
+// Embedding Provider (Docker Model Runner)
+// =============================================================================
+
+/**
+ * Embedding provider configuration for Docker Model Runner.
+ * Circuit breaker pattern prevents hammering a down service.
+ */
+export const EMBEDDING_PROVIDER = {
+  /** Docker Model Runner endpoint */
+  API_URL: process.env.EMBEDDING_API_URL || 'http://localhost:12434/engines/v1/embeddings',
+  /** Model identifier */
+  MODEL: 'hf.co/second-state/All-MiniLM-L6-v2-Embedding-GGUF',
+  /** Max input text length (chars) */
+  TEXT_LIMIT: 8000,
+  /** Minimum text length to generate embedding */
+  MIN_TEXT_LENGTH: 10,
+  /** Request timeout (ms) */
+  TIMEOUT_MS: 5000,
+  /** Consecutive failures before circuit opens */
+  FAILURE_THRESHOLD: 3,
+  /** Cooldown before retrying after circuit opens (ms) */
+  COOLDOWN_MS: 60_000
+};
+
+// =============================================================================
+// Neo4j Graph Database
+// =============================================================================
+
+/**
+ * Neo4j connection configuration.
+ */
+export const NEO4J_CONFIG = {
+  /** Default Neo4j URI (bolt protocol) */
+  DEFAULT_URI: 'bolt://localhost:7687',
+  /** Default Neo4j user */
+  DEFAULT_USER: 'neo4j',
+  /** Query timeout (ms) — prevents runaway traversals */
+  QUERY_TIMEOUT_MS: 10_000,
+  /** Max users synced in parallel per batch */
+  SYNC_BATCH_SIZE: 10
 };

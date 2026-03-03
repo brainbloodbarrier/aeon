@@ -34,6 +34,7 @@ CREATE INDEX IF NOT EXISTS idx_persona_rel_b ON persona_relationships(persona_b)
 -- TRIGGER: auto-update updated_at on modification
 -- =============================================================================
 
+DROP TRIGGER IF EXISTS persona_relationships_updated_at ON persona_relationships;
 CREATE TRIGGER persona_relationships_updated_at
     BEFORE UPDATE ON persona_relationships
     FOR EACH ROW

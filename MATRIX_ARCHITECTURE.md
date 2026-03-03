@@ -200,8 +200,8 @@ CREATE TABLE interactions (
     topics JSONB DEFAULT '[]',
 
     -- For learning
-    input_embedding VECTOR(1536),              -- For semantic search
-    response_embedding VECTOR(1536)
+    input_embedding VECTOR(384),               -- For semantic search
+    response_embedding VECTOR(384)
 );
 
 -- Relationships: Persona-to-User bonds
@@ -237,7 +237,7 @@ CREATE TABLE memories (
     importance_score FLOAT DEFAULT 0.5,         -- For retrieval prioritization
 
     -- Embeddings for semantic retrieval
-    embedding VECTOR(1536),
+    embedding VECTOR(384),
 
     -- Decay (memories can fade)
     last_accessed TIMESTAMPTZ DEFAULT NOW(),
@@ -246,7 +246,7 @@ CREATE TABLE memories (
 );
 
 -- Enable vector similarity search
-CREATE INDEX ON memories USING ivfflat (embedding vector_cosine_ops);
+CREATE INDEX ON memories USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX ON interactions USING ivfflat (input_embedding vector_cosine_ops);
 ```
 

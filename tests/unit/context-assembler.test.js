@@ -102,8 +102,11 @@ jest.unstable_mockModule('../../compute/relationship-tracker.js', () => ({
 
 jest.unstable_mockModule('../../compute/memory-extractor.js', () => ({
   extractSessionMemories: jest.fn().mockResolvedValue([]),
-  storeSessionMemories: jest.fn().mockResolvedValue(undefined),
-  generateEmbedding: jest.fn().mockResolvedValue(null)
+  storeSessionMemories: jest.fn().mockResolvedValue(undefined)
+}));
+
+jest.unstable_mockModule('../../compute/graph-sync.js', () => ({
+  safeGraphSync: jest.fn().mockResolvedValue(null)
 }));
 
 jest.unstable_mockModule('../../compute/setting-preserver.js', () => ({
@@ -193,7 +196,7 @@ let mockUpdateArc, mockClassifyMemoryElection, mockConsignToPreterite;
 let mockGenerateAmbientDetails, mockFrameAmbientContext;
 let mockGenerateTemporalContext, mockFrameTemporalContext;
 let mockAnalyzeDrift, mockLoadPersonaMarkers, mockGenerateDriftCorrection;
-let mockValidateSoulCached, mockGenerateEmbedding;
+let mockValidateSoulCached;
 
 beforeAll(async () => {
   const mod = await import('../../compute/context-assembler.js');
@@ -219,7 +222,6 @@ beforeAll(async () => {
   const memExtractor = await import('../../compute/memory-extractor.js');
   mockExtractSessionMemories = memExtractor.extractSessionMemories;
   mockStoreSessionMemories = memExtractor.storeSessionMemories;
-  mockGenerateEmbedding = memExtractor.generateEmbedding;
 
   const settingExtractor = await import('../../compute/setting-extractor.js');
   mockExtractAndSaveSettings = settingExtractor.extractAndSaveSettings;

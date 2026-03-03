@@ -13,9 +13,10 @@ import { logOperation } from './operator-logger.js';
 import {
   EXTRACTION_CONFIG,
   IMPORTANCE_WEIGHTS,
-  MEMORY_STORAGE,
-  MEMORY_IMPORTANCE
+  MEMORY_IMPORTANCE,
+  MEMORY_STORAGE
 } from './constants.js';
+import { generateEmbedding } from './embedding-provider.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Re-export constants for backward compatibility
@@ -355,35 +356,6 @@ export async function extractSessionMemories(sessionData) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Embedding Generation
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Generate an embedding vector for text content.
- * Gracefully returns null when OPENAI_API_KEY is absent.
- *
- * @param {string} text - Text to embed (truncated to 8000 chars)
- * @returns {Promise<number[]|null>} 1536-dimension embedding vector, or null
- */
-export async function generateEmbedding(text) {
-  if (!process.env.OPENAI_API_KEY) return null;
-  if (!text || text.length < MEMORY_STORAGE.MIN_EMBED_LENGTH) return null;
-
-  try {
-    const { default: OpenAI } = await import('openai');
-    const client = new OpenAI();
-    const response = await client.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: text.slice(0, MEMORY_STORAGE.EMBEDDING_TEXT_LIMIT)
-    });
-    return response.data[0].embedding;
-  } catch (error) {
-    console.error('[MemoryExtractor] Embedding generation failed:', error.message);
-    return null;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Memory Storage
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -401,20 +373,20 @@ export async function storeMemory(userId, personaId, memory) {
   try {
     const db = getPool();
 
-    // Generate embedding if API key available (graceful degradation)
+    // Generate embedding if provider available (graceful degradation)
     const embedding = await generateEmbedding(memory.content);
 
     let result;
     if (embedding) {
       result = await db.query(
-        `INSERT INTO memories (user_id, persona_id, content, memory_type, importance, embedding)
+        `INSERT INTO memories (user_id, persona_id, content, memory_type, importance_score, embedding)
          VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id`,
         [userId, personaId, memory.content, memory.memoryType, memory.importance, JSON.stringify(embedding)]
       );
     } else {
       result = await db.query(
-        `INSERT INTO memories (user_id, persona_id, content, memory_type, importance)
+        `INSERT INTO memories (user_id, persona_id, content, memory_type, importance_score)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING id`,
         [userId, personaId, memory.content, memory.memoryType, memory.importance]
@@ -471,7 +443,7 @@ export async function storeSessionMemories(userId, personaId, memories, client =
   }
 
   // Batch size validation: PostgreSQL has a 65,535 parameter limit
-  // With 5 parameters per memory, max safe batch is 13,000
+  // With 6 parameters per memory, max safe batch is ~10,900
   if (memories.length > MEMORY_STORAGE.MAX_BATCH_SIZE) {
     console.warn(`[MemoryExtractor] Batch size ${memories.length} exceeds limit, truncating to ${MEMORY_STORAGE.MAX_BATCH_SIZE}`);
     memories = memories.slice(0, MEMORY_STORAGE.MAX_BATCH_SIZE);
@@ -479,24 +451,32 @@ export async function storeSessionMemories(userId, personaId, memories, client =
 
   try {
     const db = client || getPool();
-    const ids = [];
 
-    // Build batch insert
+    // Generate embeddings in parallel (graceful degradation: null if unavailable)
+    const embeddings = await Promise.all(
+      memories.map(m => generateEmbedding(m.content))
+    );
+
+    // Build batch insert with optional embedding column
     const values = memories.map((m, i) => {
-      const offset = i * 5;
-      return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5})`;
+      const offset = i * 6;
+      return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}::vector)`;
     }).join(', ');
 
-    const params = memories.flatMap(m => [userId, personaId, m.content, m.memoryType, m.importance]);
+    const params = memories.flatMap((m, i) => [
+      userId, personaId, m.content, m.memoryType, m.importance,
+      embeddings[i] ? JSON.stringify(embeddings[i]) : null
+    ]);
 
     const result = await db.query(
-      `INSERT INTO memories (user_id, persona_id, content, memory_type, importance)
+      `INSERT INTO memories (user_id, persona_id, content, memory_type, importance_score, embedding)
        VALUES ${values}
        RETURNING id`,
       params
     );
 
-    ids.push(...result.rows.map(r => r.id));
+    const ids = result.rows.map(r => r.id);
+    const embeddedCount = embeddings.filter(Boolean).length;
 
     // Fire-and-forget logging
     logOperation('memory_store', {
@@ -504,6 +484,7 @@ export async function storeSessionMemories(userId, personaId, memories, client =
       userId,
       details: {
         memory_count: ids.length,
+        embedded_count: embeddedCount,
         memory_types: memories.map(m => m.memoryType),
         avg_importance: memories.reduce((sum, m) => sum + m.importance, 0) / memories.length
       },
@@ -553,12 +534,12 @@ export async function getRecentMemories(userId, personaId, limit = 3) {
         id,
         content,
         memory_type AS "memoryType",
-        importance,
+        importance_score AS "importance",
         created_at AS "createdAt",
         access_count AS "accessCount"
       FROM memories
       WHERE user_id = $1 AND persona_id = $2
-      ORDER BY importance DESC, created_at DESC
+      ORDER BY importance_score DESC, created_at DESC
       LIMIT $3`,
       [userId, personaId, limit]
     );
