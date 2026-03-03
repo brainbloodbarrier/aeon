@@ -1,0 +1,23 @@
+# AEON — OMP Project Config
+# All models via Cursor billing — maximize subscription value
+task:
+  agentModelOverrides:
+    # schema-check: 1M context for cross-referencing SQL + JS
+    schema-check: cursor/gemini-3.1-pro
+    # test-writer: best coder for correct ESM tests
+    test-writer: cursor/gpt-5.3-codex-xhigh-fast
+    # lint-fix: fast, cheap, good enough for formatting
+    lint-fix: cursor/gemini-3-flash
+    # soul-audit: fast scan job
+    soul-audit: cursor/gemini-3-flash
+    # reviewer: thorough, large context
+    reviewer: cursor/gemini-3.1-pro
+
+# Project-specific thinking level
+defaultThinkingLevel: high
+
+# LSP
+lsp:
+  formatOnWrite: true
+  diagnosticsOnWrite: true
+  diagnosticsOnEdit: true
