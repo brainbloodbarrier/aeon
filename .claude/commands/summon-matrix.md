@@ -17,6 +17,10 @@
 
 1. **Identify persona and category**
    - Parse the persona name from input
+   - Validate persona name before any file read or SQL lookup
+   - Reject: `..`, `/`, `\`, null bytes, empty strings
+   - Normalize to trimmed lowercase identifier
+   - Never interpolate unsanitized user input into SQL
    - Map to category using the following table:
 
    | Persona | Category |
@@ -38,6 +42,7 @@
 3. **Get or create user**
    ```sql
    -- Use execute_sql tool
+   -- Fixed command identity for this surface: 'current_session'
    INSERT INTO users (identifier)
    VALUES ('current_session')
    ON CONFLICT (identifier) DO UPDATE SET identifier = EXCLUDED.identifier
@@ -45,26 +50,42 @@
    ```
 
 4. **Get persona ID**
+   - Execute this query with a bound parameter array using the sanitized persona identifier from Phase 1
+   - SQL text:
+
    ```sql
-   SELECT id FROM personas WHERE name = '{persona}';
+   SELECT id
+   FROM personas
+   WHERE name = $1
+   LIMIT 1;
    ```
 
+   - Parameters: `[sanitized_persona]`
+
 5. **Query relevant memories**
+   - Execute with bound parameters from previous query results
+
    ```sql
    SELECT m.id, m.content, m.importance_score, m.created_at, m.memory_type
    FROM memories m
-   WHERE m.persona_id = '{persona_id}'
-     AND (m.user_id = '{user_id}' OR m.user_id IS NULL)
+   WHERE m.persona_id = $1
+     AND (m.user_id = $2 OR m.user_id IS NULL)
    ORDER BY m.importance_score DESC, m.created_at DESC
    LIMIT 10;
    ```
 
+   - Parameters: `[persona_id, user_id]`
+
 6. **Get relationship context**
+   - Execute with bound parameters from previous query results
+
    ```sql
-   SELECT familiarity_score, trust_level, user_summary, memorable_exchanges
+   SELECT familiarity_score, trust_level, user_summary, memorable_exchanges, interaction_count
    FROM relationships
-   WHERE persona_id = '{persona_id}' AND user_id = '{user_id}';
+   WHERE persona_id = $1 AND user_id = $2;
    ```
+
+   - Parameters: `[persona_id, user_id]`
 
 ### Phase 3: Context Assembly
 
@@ -102,23 +123,23 @@ Someone approaches with a question.
 
 ### Phase 5: Memory Storage (Post-Response)
 
-9. **Store interaction**
-   ```sql
-   INSERT INTO interactions (conversation_id, persona_id, user_input, persona_response, timestamp)
-   VALUES ('{conv_id}', '{persona_id}', '{user_input}', '{response}', NOW())
-   RETURNING id;
-   ```
+9. **Do not write to `interactions` from this command**
+   - This command does not create a `conversations` row first
+   - `interactions.conversation_id` references `conversations(id)`
+   - Leave interaction persistence to the API/session flow unless this command is expanded to create full conversation state safely
 
 10. **Update relationship**
-    ```sql
-    INSERT INTO relationships (persona_id, user_id, familiarity_score, interaction_count)
-    VALUES ('{persona_id}', '{user_id}', 0.01, 1)
-    ON CONFLICT (persona_id, user_id)
-    DO UPDATE SET
-      familiarity_score = relationships.familiarity_score + 0.01,
-      interaction_count = relationships.interaction_count + 1,
-      updated_at = NOW();
-    ```
+     ```sql
+     INSERT INTO relationships (persona_id, user_id, familiarity_score, interaction_count)
+     VALUES ($1, $2, 0.01, 1)
+     ON CONFLICT (persona_id, user_id)
+     DO UPDATE SET
+       familiarity_score = relationships.familiarity_score + 0.01,
+       interaction_count = relationships.interaction_count + 1,
+       updated_at = NOW();
+     ```
+
+     - Parameters: `[persona_id, user_id]`
 
 11. **Optionally create memory** (if interaction was significant)
     - Use learning extraction to determine if memory-worthy
@@ -143,8 +164,8 @@ Expected behavior:
 2. Queries Moore's memories (especially about narrative/story topics)
 3. Gets relationship with current user
 4. Moore responds, potentially referencing past conversations if they exist
-5. Stores the interaction
-6. Updates relationship familiarity
+5. Updates relationship familiarity
+6. Optionally stores a memory-worthy insight through a safe follow-up workflow
 
 ## Notes
 
@@ -152,6 +173,7 @@ Expected behavior:
 - Memories are injected as if they were always there
 - The persona experiences continuity of consciousness
 - Drift detection runs in background after each response
+- This command uses a narrower context contract than the API path
 
 ## Troubleshooting
 

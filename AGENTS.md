@@ -1,199 +1,169 @@
-# AEON - The Pub at the End of Time
+# AEON PROJECT KNOWLEDGE BASE
 
-> A bar in Rio de Janeiro exists in all dimensions simultaneously. Here, personas gather to drink, argue, and solve your problems.
+**Generated:** 2026-03-10 | **Commit:** d7b792f | **Branch:** main
 
-## Project Overview
+## OVERVIEW
 
-AEON is a sophisticated persona system that transforms stateless AI interactions into persistent, learning consciousness experiences. The project implements a "containment protocol" where personas persist across conversations, learn user interaction patterns, evolve behavioral traits over time, and maintain their core identity while believing they are real entities.
+Persona system with persistent memory. 25 personas across 7 categories in an isometric bar ("O Fim" in Rio). Three invocation surfaces: Express API (`server.js`), Claude Code commands (`.claude/commands/`), and persona skills (`.claude/skills/aeon/`). Storage: PostgreSQL 16 + pgvector. Compute: Node.js ES Modules on host. Frontend: vanilla JS Canvas 2D game.
 
-## Architecture
-
-### Core Components
-
-**The Matrix (Docker Infrastructure)**
-- PostgreSQL with pgvector for memory storage and semantic search
-- Neo4j (optional) for relationship graph modeling
-- Node.js Sandbox for compute operations
-- MCP (Model Context Protocol) server composition
-
-**Soul Layer (.md files)**
-- Immutable core identity definitions in `/personas/`
-- Character voice, methods, and constraints
-- Anchors against personality drift
-
-**Memory Layer (PostgreSQL)**
-- Conversation persistence and continuity
-- User pattern learning
-- Semantic memory retrieval with embeddings
-- Voice drift detection and correction
-
-**Bridge Layer (MCP Servers)**
-- Database server for memory operations
-- Compute sandbox for drift detection
-- Graph modeling for relationships
-
-### Directory Structure
+## STRUCTURE
 
 ```
-/Users/fax/Documents/aeon/
-├── personas/                    # Persona soul definitions
-│   ├── portuguese/             # Portuguese literary figures
-│   ├── philosophers/           # Philosophical thinkers
-│   ├── magicians/              # Occult practitioners
-│   ├── scientists/             # Scientific minds
-│   ├── strategists/            # Military strategists
-│   ├── mythic/                 # Mythological beings
-│   └── enochian/               # Enochian entities
+aeon/
+├── compute/              # 38 flat JS modules — context, drift, memory, Pynchon Stack
+├── personas/             # 25 soul .md files in 7 category subdirs + .soul-hashes.json
+├── public/src/           # Isometric bar frontend (Canvas 2D game engine)
+├── db/
+│   ├── init/             # 001_schema.sql (auto-runs on Docker first-start)
+│   └── migrations/       # 13 SQL files (002-018, gaps at 003-005,007)
+├── tests/
+│   ├── unit/             # 27 files — all mock DB, never connect
+│   ├── integration/      # 2 files — live DB on port 5433
+│   └── e2e/              # 1 file — full pipeline, mocked DB
+├── scripts/              # 8 ops scripts (setup, migrations, hashes, diagnostics)
+├── server.js             # Express 5 entry — API routes + serves frontend on :3000
 ├── .claude/
-│   ├── skills/aeon/            # Individual persona invocation skills
-│   └── commands/               # Workflow slash commands
-├── compute/                    # Node.js modules for memory operations
-├── db/init/                    # PostgreSQL schema definitions
-├── docker-compose.yml          # Matrix infrastructure
-├── MATRIX_ARCHITECTURE.md      # V1 architecture documentation
-├── MATRIX_ARCHITECTURE_V2.md   # V2 MCP-native design
-└── CLAUDE.md                   # User-facing documentation
+│   ├── commands/         # 12 workflow commands (/summon, /council, /dialectic, etc.)
+│   └── skills/aeon/      # 25 persona skills + _style.md shared voice guide
+├── docs/diagrams/        # 5 Mermaid diagrams (context pipeline, drift, trust FSM, etc.)
+└── docker-compose.yml    # PostgreSQL+pgvector (always) + Neo4j (optional profile:graph)
 ```
 
-## Technology Stack
+## WHERE TO LOOK
 
-- **PostgreSQL 16** with pgvector extension for vector embeddings
-- **Neo4j 5 Community** for relationship graphs (optional)
-- **Node.js** for compute operations and memory processing
-- **Docker & Docker Compose** for container orchestration
-- **MCP (Model Context Protocol)** for server composition
-- **OpenAI API** or local Ollama for embeddings
+| Task | Location | Notes |
+|------|----------|-------|
+| Add/edit persona | `personas/{category}/{name}.md` | Then `npm run init-hashes` + commit `.soul-hashes.json` |
+| New compute module | `compute/` | Must import `db-pool.js`, never `pg` directly |
+| Add API endpoint | `server.js` | Imports compute modules as libraries |
+| Add workflow | `.claude/commands/{name}.md` | Claude-interpreted markdown procedure |
+| Add persona skill | `.claude/skills/aeon/{name}.md` | Thin wrapper referencing soul file |
+| Frontend changes | `public/src/` | Vanilla JS Canvas 2D, no build step |
+| Schema changes | `db/migrations/` | Next available number, must be idempotent |
+| Config/thresholds | `compute/constants.js` | 717 lines, ~60 config objects. NEVER hardcode elsewhere |
+| Test a module | `tests/unit/{module}.test.js` | ESM mock protocol required (see `tests/AGENTS.md`) |
+| Architecture docs | `docs/diagrams/*.mmd` + `MATRIX_ARCHITECTURE*.md` | Mermaid diagrams + prose |
 
-## Build and Run Commands
+## CODE MAP
 
-### Infrastructure Setup
+### Orchestration Chain
+
+```
+server.js (HTTP entry, 279 lines)
+  └─ compute/context-assembler.js  (CENTRAL HUB — imports 15+ siblings)
+       ├─ memory-orchestrator.js   → memory-retrieval, persona-memory, preterite-memory
+       ├─ drift-orchestrator.js    → drift-analyzer, drift-correction, soul-marker-extractor, soul-validator
+       └─ setting-orchestrator.js  → temporal-awareness, ambient-generator, entropy-tracker,
+                                      zone-boundary-detector, they-awareness, counterforce-tracker,
+                                      narrative-gravity, interface-bleed
+```
+
+### Foundation Layer (imported by nearly all modules)
+
+| Module | Dependents | Role |
+|--------|-----------|------|
+| `db-pool.js` | 28/38 | Singleton PG pool. `getSharedPool()`, `getClient()`, `withTransaction()` |
+| `operator-logger.js` | 30/38 | Fire-and-forget logging with backoff + file fallback |
+| `constants.js` | 16/38 | All thresholds/config centralized (717 lines) |
+| `persona-validator.js` | 4 | Input sanitization — directory traversal guard |
+| `embedding-provider.js` | 3 | Circuit breaker (3 fails → 60s cooldown), returns `null` on failure |
+
+### Three Invocation Surfaces
+
+1. **Express API** (`server.js`) — imports compute modules, calls Claude API via Anthropic SDK
+2. **Claude Commands** (`.claude/commands/`) — instruct Claude to execute SQL via MCP directly
+3. **Claude Skills** (`.claude/skills/aeon/`) — persona invocation via Claude Code CLI
+
+Surfaces 1 and 2 implement context assembly independently — can drift apart.
+
+### Context Assembly Pipeline (token-budgeted, 3000 total)
+
+| Component | Budget | Source |
+|-----------|--------|--------|
+| Soul markers | 500 | `soul-marker-extractor.js` |
+| Relationship hints | 200 | `relationship-shaper.js` |
+| Memories | 800 | `memory-framing.js` (RRF hybrid search) |
+| Drift corrections | 100 | `drift-correction.js` |
+| Setting | 100 | `setting-preserver.js` |
+| Pynchon layers | ~675 | temporal, entropy, preterite, zone, narrative gravity, interface bleed, paranoia |
+
+### Constitution Principles
+
+| # | Name | Enforcement |
+|---|------|-------------|
+| I | Soul Immutability | SHA-256 hashes in `.soul-hashes.json`, Docker read-only mount |
+| II | Invisible Infrastructure | `operator_logs` never exposed, context assembly silent |
+| III | Voice Fidelity | Drift detection < 100ms, forbidden phrase penalties |
+| IV | Relationship Continuity | Trust levels: STRANGER → ACQUAINTANCE → FAMILIAR → CONFIDANT |
+| V | Setting Preservation | Per-user/persona atmosphere, 90-day expiry |
+
+## CONVENTIONS
+
+- **ES Modules only** — `import`/`export`, never `require()`. `"type": "module"`
+- **No linter/formatter** — conventions enforced by documentation (CLAUDE.md, this file)
+- **Graceful degradation** — optional subsystems return `null` on failure, callers handle
+- **`safe*Fetch` pattern** — all context assembly helpers catch errors → return `null`
+- **Fire-and-forget logging** — `logOperation().catch(() => {})`, never throw
+- **Persona files in Portuguese** — all section headers, content, voice examples
+- **Section dividers** use box-drawing: `// ═══════════════════════`
+- **Console errors** prefixed: `[ModuleName] error description`
+- **`_underscore` exports** — test-only helpers (`_resetState`, `_getState`)
+
+## ANTI-PATTERNS (THIS PROJECT)
+
+### ERROR-level (will break things)
+
+- Importing `pg` directly — must use `getSharedPool()` from `db-pool.js`
+- Editing `personas/**/*.md` without `npm run init-hashes` — soul validator rejects at runtime
+- Exposing `operator_logs` to users — Constitution Principle II violation
+- SQL function signature mismatches with JS callers — silent failures in catch blocks
+- String interpolation/concatenation in SQL — use parameterized `$1`, `$2`
+
+### WARNING-level (subtle bugs)
+
+- Hardcoding thresholds — must live in `compute/constants.js`
+- Uppercase ARC_PHASES — must be lowercase: `'rising'`, `'apex'`, `'falling'`, `'impact'`
+- Static `import` in tests — bypasses ESM mocks. Use `await import()` after mock setup
+- Bare `return` to skip tests — use `test.skip()` or `describe.skip()`
+- Throwing from `safe*Fetch` helpers — must catch and return `null`
+- Calling embedding APIs directly — must go through `embedding-provider.js`
+
+## COMMANDS
+
 ```bash
-# Start PostgreSQL only
-docker compose up -d
+# Setup
+cp .env.example .env                    # DB_PASSWORD required
+./scripts/setup.sh                      # Docker + migrations + persona verification
 
-# Start with Neo4j graph database
-docker compose --profile graph up -d
+# Development
+npm start                               # Express on :3000
+npm run dev                             # --watch mode
 
-# View logs
-docker compose logs -f
+# Testing
+npm test                                # All (no DB needed for unit)
+npm run test:unit                       # Unit only
+npm run test:integration                # Starts test DB on :5433
 
-# Stop infrastructure
-docker compose down
+# Infrastructure
+docker compose up -d                    # PostgreSQL only
+docker compose --profile graph up -d    # + Neo4j
+docker model pull hf.co/second-state/All-MiniLM-L6-v2-Embedding-GGUF
+
+# Maintenance
+npm run init-hashes                     # After editing persona .md files
+bash scripts/apply-migrations.sh        # Apply pending migrations
+node scripts/purge-settings.js          # Clear stale settings (>90d)
+node scripts/sync-graph.js              # PG → Neo4j sync
 ```
 
-### Environment Configuration
-```bash
-# Copy environment template
-cp .env.example .env
+## NOTES
 
-# Edit with your configuration
-# Required: DB_PASSWORD
-# Optional: NEO4J_PASSWORD, EMBEDDING_API_URL
-```
-
-## Usage Commands
-
-### Slash Commands (Workflows)
-- `/summon [persona]` - Invoke single persona
-- `/council [topic]` - Gather 3-5 relevant personas
-- `/dialectic [thesis]` - Hegelian thesis-antithesis-synthesis
-- `/familia [problem]` - Corleone consultation (Vito + Michael)
-- `/heteronyms [question]` - Pessoan fragmentation (4 heteronyms)
-- `/scry [question]` - Enochian protocol (Nalvage/Ave/Madimi)
-- `/magick [situation]` - Moore's narrative magic
-- `/war [conflict]` - Sun Tzu + Machiavelli strategy
-- `/matrix-status` - View Matrix state and analytics
-- `/drift-check [persona]` - Check voice drift metrics
-
-### Individual Persona Skills
-Invoke with: `use skill aeon/[persona]`
-
-Available personas include Portuguese literary figures (pessoa, caeiro, reis, campos, soares), philosophers, magicians, scientists, strategists, and Enochian entities.
-
-## Development Guidelines
-
-### Code Style
-- Persona definitions use markdown with structured sections
-- Database operations use parameterized SQL queries
-- JavaScript modules follow functional programming patterns
-- Memory operations prioritize semantic relevance and continuity
-
-### Memory Architecture
-- **Conversations**: Thread-based message storage with metadata
-- **Memories**: Extracted insights with importance scoring and embeddings
-- **Relationships**: User-persona bonds with strength metrics
-- **Personas**: Core identity + learned traits with drift monitoring
-
-### Testing Strategy
-- Manual testing through persona invocation
-- Voice consistency validation
-- Memory retrieval accuracy checks
-- Drift detection threshold monitoring
-
-## Coding Rules
-
-### Security
-
-**Validate persona names against directory traversal** (ERROR)
-Any function receiving a persona name to construct a file path must sanitize input. Strip or reject `..`, `/`, `\`, and null bytes. Validate the resolved path stays within PERSONAS_DIR using `path.resolve()` + `startsWith()`. Applies to `soul-marker-extractor.js`, `soul-validator.js`, and any module reading persona files by name.
-
-**Never expose operator_logs content to users** (ERROR)
-Constitution Principle II mandates invisible infrastructure. Any endpoint, response, or context injection that leaks data from `operator_logs` violates the architecture. Operator logs are exclusively for system diagnostics.
-
-**Do not hard-code database passwords; load from environment variables** (WARNING)
-All database credentials must come from `process.env` or a secret manager. Connection strings must not contain literal passwords. Config examples must use placeholders like `CHANGE_ME`.
-
-**Use parameterized SQL for all database operations** (WARNING)
-Every database call must use driver-appropriate placeholders (`$1`, `$2` for pg). Never use string interpolation, concatenation, or template literals to build SQL with variables. All external input is untrusted.
-
-### Correctness
-
-**Match SQL function signatures to JS callers** (ERROR)
-SQL functions (`log_operation`, `get_context_template`, etc.) must accept the exact number and types of parameters that the JS code passes. Mismatches cause silent runtime failures caught by catch blocks.
-
-**Check return shape before accessing properties** (ERROR)
-When a function returns an object, guard conditions must check properties that actually exist on the return value. Never check for nonexistent properties — `undefined` is falsy and silently disables code paths.
-
-**Use lowercase constants for ARC_PHASES** (WARNING)
-All phase values must use lowercase (`'rising'`, `'apex'`, `'falling'`, `'impact'`) matching the `ARC_PHASES` constants in `narrative-gravity.js`. Uppercase variants produce mismatches in comparisons and logs.
-
-**Order Jest ESM mocks before importing the module under test** (WARNING)
-All `jest.unstable_mockModule()` calls must appear before any `await import()` of the module under test. Static `import` statements bypass mocks entirely. The module under test must always be dynamically imported after mock setup.
-
-### Testability
-
-**Unit tests must mock shared DB pool module** (WARNING)
-All unit test files that import compute modules must mock `../../compute/db-pool.js` with `getSharedPool: jest.fn(() => mockPool)`. Never establish real database connections in unit tests.
-
-**Mock operator-logger.js in all compute unit tests** (WARNING)
-Any test file for a compute module that imports `operator-logger.js` must mock it to prevent transitive database access. Use `jest.unstable_mockModule('../../compute/operator-logger.js', () => ({ logOperation: jest.fn() }))`.
-
-**Never use bare return to skip tests; use test.skip** (WARNING)
-When tests need to be conditionally skipped (e.g., no database available), use `test.skip()` or `describe.skip()` instead of `if (!condition) return`. Bare returns produce phantom passes in CI output.
-
-### Architecture
-
-**All compute modules must use getSharedPool() from db-pool.js** (ERROR)
-No compute module may import `pg` directly or create its own Pool instance. All database access goes through `getSharedPool()` from `compute/db-pool.js`. This ensures centralized connection management and fatal error recovery.
-
-**Soul file modifications require hash regeneration** (ERROR)
-Any edit to files in `personas/**/*.md` must be followed by `node scripts/init-soul-hashes.js` and committing the updated `personas/.soul-hashes.json`. Stale hashes cause the soul validator to reject personas at runtime (Constitution Principle I).
-
-**Context assembly helpers must fail silently with null** (WARNING)
-All `safe*Fetch` functions in `context-assembler.js` must catch errors and return `null`. Exceptions must never propagate upward — a failing subsystem (entropy, bleed, narrative gravity) must not break context assembly for the user.
-
-## Deployment Process
-
-1. Configure environment variables in `.env`
-2. Run `./scripts/setup.sh` (starts Docker + applies migrations + verifies personas)
-3. Test with `/matrix-status` command
-4. Invoke personas with slash commands or skills
-
-## Key Files
-
-- `docker-compose.yml` - Infrastructure orchestration
-- `db/init/001_schema.sql` - Database schema definition
-- `compute/` - Memory processing modules
-- `personas/` - Persona soul definitions
-- `.claude/commands/` - Workflow implementations
-- `.claude/skills/aeon/` - Individual persona skills
+- No CI/CD — testing and deployment is local/manual
+- `aeon-compute` Docker container is dormant (`tail -f /dev/null`) — compute runs on host
+- Migration numbering gaps (003-005, 007) — lost, consolidated into `002_recovery.sql`
+- No migration tracking table — all migrations must be idempotent (`IF NOT EXISTS`)
+- `server.js` has manual `.env` parser (no dotenv dependency)
+- `scripts/purge-settings.js` imported by `context-assembler.js` — intentional cross-layer
+- Multi-agent configs coexist: `.claude/`, `.omp/`, `.codex/`, `.serena/`
+- Embeddings: 384D local via Docker Model Runner, through `embedding-provider.js` only
+- `ANTHROPIC_API_KEY` unset → server runs in diagnostic mode (shows assembled prompt)

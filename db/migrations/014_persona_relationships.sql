@@ -1,5 +1,5 @@
 -- =============================================================================
--- AEON Matrix - Migration 013: Persona-to-Persona Relationships
+-- AEON Matrix - Migration 014: Persona-to-Persona Relationships
 --
 -- Adds persona_relationships table for tracking bonds between personas.
 -- Supports bidirectional queries, relationship types, and strength scores.

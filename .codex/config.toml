@@ -1,13 +1,12 @@
 # ═══════════════════════════════════════════
-# AEON — Project-Specific Codex Config
+# AEON — Codex Project Config
 # ═══════════════════════════════════════════
 
-# Model: Codex runs via `ollama launch codex` with GLM-5 or Qwen3.5 (cloud)
-# Don't set model here — user selects at launch time
-# Reasoning effort: medium (these models have limited thinking budget at 8K output)
-model_reasoning_effort = "medium"
+# Model: user selects at launch time
+# Reasoning: let the model think — AEON has complex pipelines
+model_reasoning_effort = "high"
 
-# Sandbox: needs network for Docker + PG + Neo4j + embeddings
+# Sandbox: full workspace access — needs network for Docker, PG, Neo4j, embeddings
 sandbox_mode = "workspace-write"
 
 [sandbox_workspace_write]
@@ -16,7 +15,7 @@ writable_roots = [
   "/Users/fax/Documents/aeon",
 ]
 
-# Shell: pass through DB/infra env vars
+# Shell: full env passthrough for DB, Docker, Node
 [shell_environment_policy]
 inherit = "all"
 include_only = [
@@ -28,11 +27,11 @@ include_only = [
   "LANG", "LC_*",
 ]
 
-# Project docs: read AGENTS.md + CLAUDE.md for full context
-project_doc_max_bytes = 16000
+# Project docs: read full CLAUDE.md for architecture context
+project_doc_max_bytes = 32000
 project_doc_fallback_filenames = ["CLAUDE.md", "README.md"]
 
-# Features: enable what AEON dev sessions need
+# Features: everything enabled
 [features]
 multi_agent = true
 js_repl = true
