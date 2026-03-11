@@ -15,10 +15,6 @@
  *   await purgeStaleSettings(pool);
  */
 
-import pg from 'pg';
-
-const { Pool } = pg;
-
 /**
  * Purge user_settings records inactive for more than 90 days.
  *
@@ -45,6 +41,8 @@ async function runStandalone() {
     process.exit(1);
   }
 
+  const pg = await import('pg');
+  const { Pool } = pg.default;
   const pool = new Pool({
     connectionString: DATABASE_URL,
     max: 1

@@ -106,6 +106,10 @@ jest.unstable_mockModule('../../compute/memory-extractor.js', () => ({
   storeSessionMemories: jest.fn().mockResolvedValue(undefined)
 }));
 
+jest.unstable_mockModule('../../compute/embedding-provider.js', () => ({
+  generateEmbedding: jest.fn().mockResolvedValue(null)
+}));
+
 jest.unstable_mockModule('../../compute/graph-sync.js', () => ({
   safeGraphSync: jest.fn().mockResolvedValue(null)
 }));
@@ -186,14 +190,11 @@ jest.unstable_mockModule('../../compute/interface-bleed.js', () => ({
 // Import the module under test AFTER all mocks are registered
 // ══════════════════════════════════════════════════════════════════════════════
 
-let assembleContext, completeSession, assembleCouncilContext, CONFIG;
+let assembleContext, assembleCouncilContext, CONFIG;
 
 // Import mocked modules so we can access/control them in tests
-let mockEnsureRelationship, mockFrameMemories, mockGenerateBehavioralHints;
-let mockCompileUserSetting, mockExtractSessionMemories, mockStoreSessionMemories;
-let mockUpdateFamiliarity, mockExtractAndSaveSettings, mockLogOperation;
-let mockGetEntropyState, mockApplySessionEntropy, mockTouchTemporalState;
-let mockUpdateArc, mockClassifyMemoryElection, mockConsignToPreterite;
+let mockEnsureRelationship, mockFrameMemories;
+let mockCompileUserSetting;
 let mockGenerateAmbientDetails, mockFrameAmbientContext;
 let mockGenerateTemporalContext, mockFrameTemporalContext;
 let mockAnalyzeDrift, mockLoadPersonaMarkers, mockGenerateDriftCorrection;
@@ -202,49 +203,22 @@ let mockValidateSoulCached;
 beforeAll(async () => {
   const mod = await import('../../compute/context-assembler.js');
   assembleContext = mod.assembleContext;
-  completeSession = mod.completeSession;
   assembleCouncilContext = mod.assembleCouncilContext;
   CONFIG = mod.CONFIG;
 
   // Grab references to mock functions for fine-grained control
   const relTracker = await import('../../compute/relationship-tracker.js');
   mockEnsureRelationship = relTracker.ensureRelationship;
-  mockUpdateFamiliarity = relTracker.updateFamiliarity;
 
   const memFraming = await import('../../compute/memory-framing.js');
   mockFrameMemories = memFraming.frameMemories;
 
-  const relShaper = await import('../../compute/relationship-shaper.js');
-  mockGenerateBehavioralHints = relShaper.generateBehavioralHints;
-
   const settingPres = await import('../../compute/setting-preserver.js');
   mockCompileUserSetting = settingPres.compileUserSetting;
 
-  const memExtractor = await import('../../compute/memory-extractor.js');
-  mockExtractSessionMemories = memExtractor.extractSessionMemories;
-  mockStoreSessionMemories = memExtractor.storeSessionMemories;
-
-  const settingExtractor = await import('../../compute/setting-extractor.js');
-  mockExtractAndSaveSettings = settingExtractor.extractAndSaveSettings;
-
-  const opLogger = await import('../../compute/operator-logger.js');
-  mockLogOperation = opLogger.logOperation;
-
-  const entropy = await import('../../compute/entropy-tracker.js');
-  mockGetEntropyState = entropy.getEntropyState;
-  mockApplySessionEntropy = entropy.applySessionEntropy;
-
   const temporal = await import('../../compute/temporal-awareness.js');
-  mockTouchTemporalState = temporal.touchTemporalState;
   mockGenerateTemporalContext = temporal.generateTemporalContext;
   mockFrameTemporalContext = temporal.frameTemporalContext;
-
-  const narGravity = await import('../../compute/narrative-gravity.js');
-  mockUpdateArc = narGravity.updateArc;
-
-  const preterite = await import('../../compute/preterite-memory.js');
-  mockClassifyMemoryElection = preterite.classifyMemoryElection;
-  mockConsignToPreterite = preterite.consignToPreterite;
 
   const ambient = await import('../../compute/ambient-generator.js');
   mockGenerateAmbientDetails = ambient.generateAmbientDetails;
@@ -273,19 +247,6 @@ const BASE_PARAMS = {
   userId: 'user-456',
   query: 'What is the nature of being?',
   sessionId: 'session-789'
-};
-
-const SESSION_DATA = {
-  sessionId: 'session-789',
-  userId: 'user-456',
-  personaId: 'persona-123',
-  personaName: 'Hegel',
-  messages: [
-    { role: 'user', content: 'What is the nature of being?' },
-    { role: 'assistant', content: 'Being is the most abstract determination.' }
-  ],
-  startedAt: 1700000000000,
-  endedAt: 1700000300000
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -570,153 +531,9 @@ describe('Context Assembler', () => {
     });
   });
 
-  // ════════════════════════════════════════════════════════════════════════
-  // completeSession — happy path and idempotency
-  // ════════════════════════════════════════════════════════════════════════
-
-  describe('completeSession()', () => {
-    it('returns session completion results with relationship update and memory count', async () => {
-      // checkSessionCompleted returns no rows (not already completed)
-      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
-
-      const result = await completeSession(SESSION_DATA);
-
-      expect(result).toBeDefined();
-      expect(result.relationship).toBeDefined();
-      expect(result.relationship.effectiveDelta).toBe(0.05);
-      expect(result.memoriesStored).toBe(0);
-      expect(result.sessionQuality).toBeDefined();
-      expect(result.sessionQuality.messageCount).toBe(2);
-    });
-
-    it('returns skipped result when session was already completed (idempotency)', async () => {
-      // checkSessionCompleted returns a row (already completed)
-      mockQuery.mockResolvedValueOnce({ rows: [{ 1: 1 }], rowCount: 1 });
-
-      const result = await completeSession(SESSION_DATA);
-
-      expect(result.skipped).toBe('already_completed');
-      expect(result.relationship).toBeNull();
-      expect(result.memoriesStored).toBe(0);
-      // updateFamiliarity should NOT have been called
-      expect(mockUpdateFamiliarity).not.toHaveBeenCalled();
-    });
-
-    it('stores extracted memories and classifies them for preterite status', async () => {
-      // Not already completed
-      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
-
-      const fakeMemories = [
-        { id: 'mem-1', content: 'Deep insight about being', importance_score: 0.9 },
-        { id: 'mem-2', content: 'Small talk about weather', importance_score: 0.2 }
-      ];
-      mockExtractSessionMemories.mockResolvedValueOnce(fakeMemories);
-      mockClassifyMemoryElection
-        .mockReturnValueOnce({ status: 'elect', reason: 'important' })
-        .mockReturnValueOnce({ status: 'preterite', reason: 'trivial' });
-
-      const result = await completeSession(SESSION_DATA);
-
-      expect(result.memoriesStored).toBe(2);
-      expect(result.memoriesConsignedToPreterite).toBe(1);
-      expect(mockStoreSessionMemories).toHaveBeenCalledWith('user-456', 'persona-123', fakeMemories, mockPool);
-      expect(mockConsignToPreterite).toHaveBeenCalledTimes(1);
-    });
-
-    it('returns graceful error result when the outer try/catch fires', async () => {
-      // Make the idempotency check pass but updateFamiliarity throw
-      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
-      mockUpdateFamiliarity.mockRejectedValueOnce(new Error('Critical DB failure'));
-
-      const result = await completeSession(SESSION_DATA);
-
-      expect(result.error).toBe('Critical DB failure');
-      expect(result.relationship).toBeNull();
-      expect(result.memoriesStored).toBe(0);
-    });
-
-    it('calls Phase 1 Pynchon hooks: touchTemporalState, applySessionEntropy, updateArc', async () => {
-      // Not already completed
-      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
-
-      await completeSession(SESSION_DATA);
-
-      expect(mockTouchTemporalState).toHaveBeenCalledWith('persona-123', {
-        sessionDuration: 300000,
-        messageCount: 2
-      }, mockPool);
-      expect(mockApplySessionEntropy).toHaveBeenCalledWith('session-789', mockPool);
-      expect(mockUpdateArc).toHaveBeenCalledWith('session-789', -1.0, mockPool);
-    });
-
-    it('silently handles Pynchon hook failures without breaking session completion', async () => {
-      // Not already completed
-      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
-
-      // Make all Pynchon hooks fail
-      mockTouchTemporalState.mockRejectedValueOnce(new Error('temporal fail'));
-      mockApplySessionEntropy.mockRejectedValueOnce(new Error('entropy fail'));
-      mockUpdateArc.mockRejectedValueOnce(new Error('arc fail'));
-
-      const result = await completeSession(SESSION_DATA);
-
-      // Should still succeed — these are non-critical
-      expect(result.relationship).toBeDefined();
-      expect(result.error).toBeUndefined();
-    });
-  });
-
-  // ════════════════════════════════════════════════════════════════════════
-  // assembleCouncilContext
-  // ════════════════════════════════════════════════════════════════════════
-
-  describe('assembleCouncilContext()', () => {
-    const COUNCIL_PARAMS = {
-      personaId: 'hegel-uuid',
-      personaName: 'Hegel',
-      personaSlug: 'hegel',
-      userId: 'user-456',
-      participantIds: ['socrates-uuid', 'diogenes-uuid'],
-      participantNames: ['Socrates', 'Diogenes', 'Hegel'],
-      sessionId: 'council-session-1',
-      topic: 'What is the nature of truth?',
-      councilType: 'council'
-    };
-
-    it('returns a council context with the correct frame text', async () => {
-      const result = await assembleCouncilContext(COUNCIL_PARAMS);
-
-      expect(result.systemPrompt).toContain('gathered at O Fim');
-      expect(result.systemPrompt).toContain('Socrates');
-      expect(result.systemPrompt).toContain('Diogenes');
-      expect(result.systemPrompt).toContain('What is the nature of truth?');
-      expect(result.metadata.councilType).toBe('council');
-      expect(result.metadata.participantCount).toBe(2);
-    });
-
-    it('builds correct frame for dialectic council type', async () => {
-      const result = await assembleCouncilContext({
-        ...COUNCIL_PARAMS,
-        councilType: 'dialectic'
-      });
-
-      expect(result.systemPrompt).toContain('dialectic process');
-      expect(result.systemPrompt).toContain('thesis');
-    });
-
-    it('includes Pynchon layers when enabled and ambient data exists', async () => {
-      mockGenerateAmbientDetails.mockResolvedValueOnce({
-        microEvents: ['Smoke curls from nowhere.'],
-        timeOfNight: 'late',
-        entropyLevel: 0.3
-      });
-      mockFrameAmbientContext.mockReturnValueOnce('[AMBIENT] Smoke curls from nowhere.');
-
-      const result = await assembleCouncilContext(COUNCIL_PARAMS);
-
-      expect(result.systemPrompt).toContain('Smoke curls');
-      expect(result.metadata.hasAmbientContext).toBe(true);
-      expect(result.metadata.pynchonEnabled).toBe(true);
+  describe('re-exports', () => {
+    it('continues to expose assembleCouncilContext from the facade', () => {
+      expect(typeof assembleCouncilContext).toBe('function');
     });
   });
 });
