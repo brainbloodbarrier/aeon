@@ -8,7 +8,9 @@
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPattern=tests/unit",
     "test:integration": "bash scripts/setup-test-db.sh && node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPattern=tests/integration",
     "test:integration:teardown": "docker compose -f docker-compose.test.yml down -v",
-    "init-hashes": "node scripts/init-soul-hashes.js"
+    "init-hashes": "node scripts/init-soul-hashes.js",
+    "start": "node server.js",
+    "dev": "node --watch server.js"
   },
   "jest": {
     "testEnvironment": "node",
@@ -22,6 +24,8 @@
     ]
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "express": "^5.2.1",
     "neo4j-driver": "^5.27.0",
     "pg": "^8.11.3"
   },

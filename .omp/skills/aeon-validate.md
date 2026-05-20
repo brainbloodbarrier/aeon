@@ -1,16 +1,16 @@
 ---
 name: aeon-validate
-description: Full validation pass — tests, hashes, schema, types
+description: Full validation pass — tests, hashes, schema, architecture rules
 input: none
 ---
 
-Run a complete validation of the AEON system:
+Run a complete validation of the AEON system. Fix issues where possible.
 
-1. `npm run test:unit` — report failures
-2. Check soul hashes: `node -e "import('./compute/soul-validator.js').then(m => m.validateAllPersonas().then(console.log))"` or compare hashes manually
+1. `npm run test:unit` — if tests fail, diagnose and fix
+2. Check soul hashes match persona files — if stale, run `npm run init-hashes`
 3. Verify migration numbering in `db/migrations/` is sequential
-4. Grep for direct `pg` imports in `compute/` (should be zero)
-5. Grep for `process.env` usage outside approved locations
-6. Check `compute/constants.js` for any TODO/FIXME markers
+4. Grep for direct `pg` imports in `compute/` (should be zero) — fix any found
+5. Grep for hardcoded magic numbers in `compute/` modules (should be in `constants.js`) — move them
+6. Check `compute/constants.js` for TODO/FIXME markers — resolve or report
 
-Report a summary: PASS/FAIL per check, with details on failures.
+Report summary: PASS/FAIL per check, with details on what was fixed and what needs human input.

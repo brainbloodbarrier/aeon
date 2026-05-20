@@ -29,6 +29,12 @@ npm run test:unit
 # Run only integration tests (starts test DB automatically)
 npm run test:integration
 
+# Tear down integration test DB
+npm run test:integration:teardown
+
+# Run e2e tests (persona invocation flow)
+node --experimental-vm-modules node_modules/jest/bin/jest.js tests/e2e
+
 # Run a single test file
 node --experimental-vm-modules node_modules/jest/bin/jest.js tests/unit/drift-analyzer.test.js
 
@@ -40,6 +46,9 @@ node scripts/purge-settings.js
 
 # Manual graph sync (PG → Neo4j)
 node scripts/sync-graph.js
+
+# Inspect operator logs (diagnostics only, never expose to users)
+node scripts/inspect-logs.js
 
 # Apply database migrations
 bash scripts/apply-migrations.sh
@@ -135,6 +144,48 @@ Init schema: `db/init/001_schema.sql`. Migrations in `db/migrations/` (numbered:
 ### MCP Integration
 
 MCP tools are configured via Claude Code settings (`.claude/settings.local.json`), not Docker. The compute modules in `compute/` run directly on the host via Node.js — Docker only provides the storage layer (PostgreSQL + pgvector).
+
+### Claude Code Hooks (`~/.claude/hooks/`)
+
+19 hooks user-wide em `~/.claude/settings.json`. Todos os hooks de logging escrevem para `~/.claude/logs/session-intel.jsonl` (JSONL, uma linha por evento tipado). O log é resetado a cada `SessionStart`.
+
+**Lifecycle:**
+- `session-start.sh` — Injeta git state + Serena discovery via `additionalContext`. Reseta `session-reads.log` e `session-intel.jsonl`.
+- `session-end.sh` — macOS notification de uncommitted changes. Smart `/debug` suggestion quando >= 2 de 5 thresholds atingidos (dirty >= 10, commits >= 5, untracked >= 15, failures >= 3, duration >= 30min) E sessão >= 5min.
+- `pre-compact.sh` — Preserva contexto pós-compaction via `systemMessage` (branch, dirty, CLAUDE.md reminder, top-read files, Serena coaching).
+
+**Security (PreToolUse, blocking):**
+- `bash-guard.sh` — 3 tiers: catastrophic (exit 2), dangerous (ask), risky (ask).
+- `file-guard.sh` — Bloqueia secrets/credentials (exit 2), ask para lock files e blueprint violations.
+- `elicitation-guard.sh` — Ask para MCP URL mode.
+
+**Quality (PostToolUse):**
+- `auto-lint.sh` (Write|Edit, blocking) — Syntax check (exit 2 on errors). Complexity warnings via `additionalContext` (Claude vê). TS/TSX: skip syntax (LSP handles).
+- `anti-drift.sh` (any, async) — Logs file_edit events + blueprint drift to session-intel.
+- `token-waste.sh` (any, async) — Tracks Read ops em `session-reads.log` (feeds prompt-context + pre-compact). Logs large responses (>50KB).
+
+**Context:**
+- `prompt-context.sh` (UserPromptSubmit) — Ancora `[⚓ Context: date | Project | Plan]` + Serena coaching + re-read warnings.
+- `subagent-context.sh` (SubagentStart) — Injeta project/branch/CLAUDE.md/Serena em subagents.
+
+**Intel/Logging (async):**
+- `failure-log.sh` — Tool failures → session-intel + failures.log.
+- `notification-log.sh` — Desktop alerts (idle/permission/error) + session-intel.
+- `elicitation-result.sh` — Desktop alert on decline/cancel + session-intel.
+- `teammate-idle.sh` — Desktop notification + session-intel.
+
+**Teams:**
+- `teammate-check.sh` (blocking) — Bloqueia idle se teammate tem tasks in_progress.
+
+**Config/Worktree:**
+- `config-change.sh` — Backup configs + bloqueia policy_settings.
+- `worktree-create.sh` / `worktree-remove.sh` — Lifecycle de git worktrees com stash safety.
+
+**Prompt hooks:**
+- `SubagentStop` / `TaskCompleted` / `Stop` — Prompt-based validation (JSON one-liner).
+- `PermissionRequest` (Read|Glob|Grep) — Auto-allow.
+
+**Session Intel Pipeline:** `session-intel.jsonl` acumula eventos tipados (`tool_failure`, `file_edit`, `large_response`, `complexity_warning`, `blueprint_drift`, `notification`, `teammate_idle`, `elicitation_result`, `debug_suggested`). Consumido por `session-end.sh` para decidir se sugere `/debug`.
 
 ---
 

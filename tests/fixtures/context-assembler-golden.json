@@ -1,0 +1,56 @@
+{
+  "assembleContext": {
+    "systemPrompt": "It is 2 AM at O Fim. Chopp flows cold.\nThis person is new to you.\nYou recall a conversation about philosophy.",
+    "componentKeys": [
+      "ambient",
+      "counterforce",
+      "driftCorrection",
+      "entropy",
+      "interfaceBleed",
+      "memories",
+      "narrativeGravity",
+      "personaMemories",
+      "personaRelations",
+      "preterite",
+      "relationship",
+      "setting",
+      "temporal",
+      "theyAwareness",
+      "zoneResistance"
+    ],
+    "metadata": {
+      "truncated": false,
+      "memoriesIncluded": 0,
+      "driftScore": null,
+      "trustLevel": "stranger",
+      "pynchonEnabled": true,
+      "hasTemporalContext": false,
+      "hasPreteriteContext": false,
+      "hasZoneResistance": false,
+      "hasAmbientContext": false,
+      "hasEntropyContext": false,
+      "hasTheyAwareness": false,
+      "hasCounterforce": false,
+      "hasNarrativeGravity": false,
+      "hasInterfaceBleed": false,
+      "entropyLevel": 0.1
+    }
+  },
+  "completeSession": {
+    "relationship": {
+      "effectiveDelta": 0.05,
+      "trustLevelChanged": false,
+      "newTrustLevel": "stranger"
+    },
+    "memoriesStored": 0,
+    "memoriesConsignedToPreterite": 0,
+    "settingsExtracted": [],
+    "sessionQuality": {
+      "messageCount": 2,
+      "durationMs": 300000,
+      "hasFollowUps": false
+    },
+    "entropyState": "stable",
+    "arcPhase": "impact"
+  }
+}
